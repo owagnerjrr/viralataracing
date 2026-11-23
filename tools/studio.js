@@ -906,11 +906,11 @@ const bandanaTexture = paintTexture(256, (ctx, s) => {
   ctx.stroke();
   ctx.fillStyle = "#f1d28a";
   for (const [x, y, r] of [
-    [128, 108, 19],
-    [99, 82, 10],
-    [118, 67, 10],
-    [140, 67, 10],
-    [158, 84, 10],
+    [128, 164, 16],
+    [105, 144, 8],
+    [119, 133, 8],
+    [137, 133, 8],
+    [151, 145, 8],
   ]) {
     ctx.beginPath();
     ctx.ellipse(x, y, r, r * 0.81, 0, 0, Math.PI * 2);
