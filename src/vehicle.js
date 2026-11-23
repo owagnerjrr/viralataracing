@@ -77,8 +77,10 @@ export class ArcadeVehicle {
     if (speed < -9) speed = -9;
 
     const steerStrength = Math.min(1, Math.abs(speed) / 8.5);
+    // During a drift the kart keeps rotating into the slide, while
+    // counter-steering noticeably tightens or opens the driving line.
     const yaw = drifting
-      ? driftSide * (0.61 + 0.26 * this.steer * driftSide)
+      ? driftSide * (0.64 + 0.4 * this.steer * driftSide)
       : this.steer * 1.29;
     const oldHeading = heading;
     heading -= yaw * dt * steerStrength * direction * (air ? 0.38 : 1);
