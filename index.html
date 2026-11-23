@@ -4,32 +4,51 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1.0" />
     <link rel="icon" href="data:," />
-    <title>Dupla Kart — Protótipo</title>
+    <title>Vira-Lata Racing — Protótipo</title>
     <link rel="stylesheet" href="./src/style.css" />
   </head>
   <body>
     <div id="app">
       <div id="hud">
-        <div class="brand">
-          🏁 DUPLA <b>KART</b><small>PROTÓTIPO 0.3</small>
+        <div class="hud-top">
+          <div class="brand">VIRA-LATA <b>Racing</b></div>
+          <div class="stats">
+            <span id="lap">VOLTA 1/3</span><span id="time">00:00.0</span>
+            <span id="speed">0 <small>KM/H</small></span>
+          </div>
         </div>
-        <div class="stats">
-          <span id="lap">VOLTA 1/3</span><span id="time">00:00.0</span
-          ><span id="speed">0 <small>KM/H</small></span>
-        </div>
-        <div class="crew">
-          <span id="pilot">🐕 Piloto: Caramelo</span
-          ><span id="partner">🐈‍⬛ Itens: Gato Preto</span>
-        </div>
-        <div class="items">
-          <span id="item">🎁 Sem item</span><span id="boost">TURBO ▱▱▱▱▱</span>
+        <div class="race-panel">
+          <div class="crew">
+            <span id="pilot">🐕 Piloto: Caramelo</span>
+            <span id="partner">🐈‍⬛ Parceiro: Gato Preto</span>
+          </div>
+          <div class="inventory">
+            <div class="slot" id="dog-item">
+              <small>Caramelo</small><strong>Sem item</strong>
+            </div>
+            <div class="slot" id="cat-item">
+              <small>Gato Preto</small><strong>Sem item</strong>
+            </div>
+          </div>
+          <div class="drift-row">
+            <label for="drift-meter"
+              >Drift <progress id="drift-meter" value="0" max="1.49"></progress
+            ></label>
+            <span id="boost">Boost inativo</span>
+          </div>
+          <div class="race-actions">
+            <button id="swap-pilot" data-action="swap">
+              <span aria-hidden="true">⇄</span> Trocar piloto
+            </button>
+            <button data-action="restart">Reiniciar</button>
+          </div>
         </div>
       </div>
       <div id="help">
         WASD / SETAS: dirigir · ESPAÇO: derrapar · SHIFT: trocar · E: item · R:
         reposicionar · ESC: pausar
       </div>
-      <div id="toast"></div>
+      <div id="toast" role="status"></div>
       <div id="touch" aria-label="Controles de corrida">
         <div>
           <button data-key="ArrowLeft" aria-label="Esquerda">←</button
@@ -37,8 +56,7 @@
           ><button data-key="Space">Drift</button>
         </div>
         <div>
-          <button data-action="swap">Trocar</button
-          ><button data-action="item">Item</button
+          <button data-action="item">Item</button
           ><button data-action="recover">Repos.</button
           ><button data-action="pause" aria-label="Pausar">Ⅱ</button>
         </div>
@@ -48,7 +66,7 @@
         </div>
       </div>
       <div id="menu">
-        <h1>🏁 DUPLA KART</h1>
+        <h1>🏁 VIRA-LATA RACING</h1>
         <p>Caramelo & Gato Preto</p>
         <p id="race-status" role="status">
           Se o jogo não carregar, abra o endereço informado pelo Vite ou use a
@@ -66,6 +84,6 @@
       </div>
     </div>
     <script type="module" src="./src/bootstrap.js"></script>
-    <noscript>Ative o JavaScript para jogar Dupla Kart.</noscript>
+    <noscript>Ative o JavaScript para jogar Vira-Lata Racing.</noscript>
   </body>
 </html>

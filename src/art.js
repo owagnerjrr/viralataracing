@@ -115,4 +115,4 @@ export const bananaGeometry = loft([
 ]);
 
 export const turboIcon =
-  '<svg viewBox="0 0 32 26" width="26" height="22" aria-hidden="true"><path d="M2 2h27L17 13h10L6 25l5-10H4L16 7H2Z" fill="#ffd656" stroke="#fff3ad" stroke-width="1.4" stroke-linejoin="round"/></svg>';
+  '<svg viewBox="0 0 32 26" width="26" height="22" aria-hidden="true"><path d="M2 2h27L17 13h10L6 25l5-10H4L16 7H2Z" fill="#ffd656" stroke="#473321" stroke-width="1.4" stroke-linejoin="round"/></svg>';

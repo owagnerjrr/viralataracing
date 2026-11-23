@@ -1,6 +1,6 @@
 {
-  "name": "dupla-kart",
-  "version": "0.3.0",
+  "name": "vira-lata-racing",
+  "version": "0.4.0",
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",

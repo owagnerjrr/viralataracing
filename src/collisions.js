@@ -1,6 +1,16 @@
-// Static XZ collision with a three-circle chassis and a bounded movement step.
-const radius = 0.92;
-const chassisOffsets = [-1.25, 0, 1.25];
+// Static XZ collision with a multi-circle chassis and a bounded movement step.
+const chassis = [
+  { lateral: 0, longitudinal: -0.97, radius: 0.99 },
+  { lateral: 0, longitudinal: 0, radius: 1.13 },
+  { lateral: 0, longitudinal: 0.97, radius: 0.99 },
+  ...[-1, 1].flatMap((side) =>
+    [-1.15, 1.15].map((longitudinal) => ({
+      lateral: side * 1.31,
+      longitudinal,
+      radius: 0.41,
+    })),
+  ),
+];
 
 export function rectangle(x, z, width, length, angle, height) {
   return {
@@ -11,15 +21,15 @@ export function rectangle(x, z, width, length, angle, height) {
     sin: Math.sin(angle),
     cos: Math.cos(angle),
     height,
-    reach: Math.hypot(width, length) / 2 + 2.3,
+    reach: Math.hypot(width, length) / 2 + 2.6,
   };
 }
 
 export function trunk(x, z, radius, height) {
-  return { x, z, radius, height, reach: radius + 2.3 };
+  return { x, z, radius, height, reach: radius + 2.6 };
 }
 
-function contact(x, z, solid) {
+function contact(x, z, radius, solid) {
   const dx = x - solid.x;
   const dz = z - solid.z;
   if (solid.radius !== undefined) {
@@ -71,12 +81,10 @@ export function moveKart(position, motion, heading, y, dt, solids) {
     for (let pass = 0; pass < 4; pass++) {
       let corrected = false;
       for (const solid of nearby) {
-        for (const offset of chassisOffsets) {
-          const hit = contact(
-            position.x + fx * offset,
-            position.z + fz * offset,
-            solid,
-          );
+        for (const { lateral, longitudinal, radius } of chassis) {
+          const x = position.x + fx * longitudinal + fz * lateral;
+          const z = position.z + fz * longitudinal - fx * lateral;
+          const hit = contact(x, z, radius, solid);
           if (!hit) continue;
           const [nx, nz, depth] = hit;
           position.x += nx * (depth + 0.001);
