@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="pt-BR">
+  <meta charset="utf-8" /><meta
+    name="viewport"
+    content="width=device-width,initial-scale=1"
+  /><title>Caramelo — revisão de modelo</title>
+  <style>
+    body {
+      margin: 0;
+      background: #102326;
+      color: #e9eee5;
+      font: 15px system-ui;
+    }
+    header {
+      position: absolute;
+      z-index: 2;
+      top: 20px;
+      left: 24px;
+      max-width: 340px;
+    }
+    h1 {
+      font-size: 24px;
+      margin: 0 0 8px;
+    }
+    p {
+      line-height: 1.5;
+      color: #b3c9c6;
+    }
+    select,
+    button {
+      background: #22483f;
+      color: white;
+      border: 1px solid #557669;
+      border-radius: 8px;
+      padding: 10px;
+      margin: 4px 3px 4px 0;
+    }
+    #status {
+      font-size: 13px;
+    }
+    canvas {
+      display: block;
+    }
+    footer {
+      position: absolute;
+      bottom: 12px;
+      left: 24px;
+      color: #b3c9c6;
+    }
+  </style>
+  <header>
+    <h1>Caramelo · estudo no Blender</h1>
+    <p>
+      Modelo candidato. A versão publicada do jogo permanece em 0.11. Arraste
+      para girar e use a roda para aproximar.
+    </p>
+    <label
+      >Detalhe
+      <select id="lod">
+        <option>high</option>
+        <option>medium</option>
+        <option>low</option>
+      </select></label
+    ><label
+      >Animação
+      <select id="clip"></select></label
+    ><button id="blink">Piscar</button><button id="wire">Malha</button>
+    <p id="status">Carregando…</p>
+    <p id="metrics">Medindo esta prévia no computador atual…</p>
+  </header>
+  <footer>Modelo original · GLB com skinning · Three.js</footer>
+  <script type="module" src="./character-review.js"></script>
+</html>

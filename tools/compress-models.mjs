@@ -6,7 +6,8 @@ import { MeshoptEncoder } from "meshoptimizer";
 const inputDir = process.argv[2];
 if (!inputDir)
   throw new Error("Passe a pasta dos GLBs exportados pelo estúdio.");
-const outputDir = fileURLToPath(new URL("../public/models/", import.meta.url));
+const outputDir = process.argv[3] ? resolve(process.argv[3]) : fileURLToPath(new URL("../public/models/", import.meta.url));
+const modelNames = process.argv.length > 4 ? process.argv.slice(4) : ["Caramelo", "GatoPreto", "KartRibeirao", "Grove"];
 const key = "EXT_meshopt_compression";
 const bytesPerComponent = {
   5120: 1,
@@ -19,7 +20,7 @@ const bytesPerComponent = {
 const components = { SCALAR: 1, VEC2: 2, VEC3: 3, VEC4: 4 };
 
 await MeshoptEncoder.ready;
-for (const name of ["Caramelo", "GatoPreto", "KartRibeirao", "Grove"]) {
+for (const name of modelNames) {
   const file = name + ".glb";
   const original = await readFile(resolve(inputDir, file));
   const jsonSize = original.readUInt32LE(12);
