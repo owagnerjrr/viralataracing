@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { createMobileControls } from "./mobile-controls.js";
 import { ArcadeVehicle, PHYSICS_STEP } from "./vehicle.js";
 import {
   centerline,
@@ -1266,7 +1267,13 @@ function updateHUD() {
   $("swap-pilot").disabled = swapCooldown > 0;
   $("swap-pilot").classList.toggle("swapping", swap > 0);
   $("drift-meter").value = drift;
-  $("drift-meter").parentElement.dataset.tier = chargedTier();
+  const tier = chargedTier();
+  $("drift-meter").parentElement.dataset.tier = tier;
+  mobile.update({
+    tier,
+    activeDrift: driftSide !== 0,
+    item: swap <= 0 && !bananaPending ? partner().item : null,
+  });
   const boostIndicator = $("boost");
   const boostState =
     itemBoost > 0 ? "item" : driftBoost > 0 ? String(activeTier) : "idle";
@@ -1345,10 +1352,19 @@ const driveKeys = new Set([
   "Space",
 ]);
 let snapCamera = true;
-const touchKeys = new Map();
+const mobile = createMobileControls($("touch"), $("mobile-settings"), {
+  active: () => running && !paused,
+  onCancelDrift: () => {
+    if (!keys.Space) cancelDrift();
+  },
+  itemIcons: {
+    banana: { label: "banana", html: "🍌" },
+    turbo: { label: "turbo", html: turboIcon },
+  },
+});
 function clearControls() {
   keys = {};
-  touchKeys.clear();
+  mobile.clear();
 }
 function setPaused(value) {
   paused = value;
@@ -1404,20 +1420,26 @@ window.addEventListener("keyup", (e) => delete keys[e.code]);
 window.addEventListener("blur", () => {
   if (running && !paused) setPaused(true);
 });
-for (const button of document.querySelectorAll("[data-key]")) {
-  button.addEventListener("pointerdown", (event) => {
-    button.setPointerCapture(event.pointerId);
-    touchKeys.set(event.pointerId, button.dataset.key);
-  });
-  for (const type of ["pointerup", "pointercancel", "lostpointercapture"]) {
-    button.addEventListener(type, (event) => touchKeys.delete(event.pointerId));
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden && running && !paused) setPaused(true);
+});
+for (const button of document.querySelectorAll("[data-action]")) {
+  const action = actions[button.dataset.action];
+  if (button.closest("#touch")) {
+    button.addEventListener("pointerdown", (event) => {
+      if (event.button !== 0 || button.disabled || !running || paused) return;
+      event.preventDefault();
+      action();
+    });
+    button.addEventListener("click", (event) => {
+      if (event.detail === 0) action();
+    });
+  } else {
+    button.addEventListener("click", action);
   }
 }
-for (const button of document.querySelectorAll("[data-action]")) {
-  button.addEventListener("click", actions[button.dataset.action]);
-}
 function held(code) {
-  return keys[code] || [...touchKeys.values()].includes(code);
+  return Boolean(keys[code]) || mobile.held(code);
 }
 $("play").onclick = () => {
   unlockAudio();
@@ -1637,8 +1659,9 @@ function tick() {
   const stepCount = Math.max(1, Math.ceil(visualDt / PHYSICS_STEP - 1e-7));
   const dt = visualDt / stepCount;
   for (let step = 0; step < stepCount && running && !paused && dt > 0; step++) {
-    let accel = held("KeyW") || held("ArrowUp"),
-      brake = held("KeyS") || held("ArrowDown"),
+    let brake = held("KeyS") || held("ArrowDown"),
+      accel =
+        held("KeyW") || held("ArrowUp") || (!brake && mobile.autoAccelerate()),
       left = held("KeyA") || held("ArrowLeft"),
       right = held("KeyD") || held("ArrowRight"),
       turn = Number(right) - Number(left);

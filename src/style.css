@@ -322,45 +322,307 @@ button:disabled {
   text-align: center;
   font-size: clamp(15px, 3.4vw, 27px);
 }
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.mobile-options {
+  width: min(390px, 100%);
+  border: 1px solid #637687;
+  background: #172b3be8;
+  padding: 7px 10px;
+  border-radius: 9px;
+  font-size: 13px;
+}
+.mobile-options summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+#mobile-settings {
+  text-align: left;
+  display: grid;
+  gap: 8px;
+  border: 0;
+  padding: 10px 0 0;
+  margin: 0;
+}
+.touch-range {
+  display: grid;
+  grid-template-columns: 66px minmax(54px, 1fr) 43px;
+  align-items: center;
+  gap: 8px;
+}
+.touch-range input {
+  margin: 0;
+  accent-color: #ffbb5a;
+}
+.touch-range output {
+  text-align: right;
+}
+[data-mobile-defaults] {
+  justify-self: start;
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 12px;
+}
 #touch {
   display: none;
 }
-@media (pointer: coarse) {
+@media (any-pointer: coarse) {
   #help {
     display: none;
   }
+  #menu {
+    justify-content: safe center;
+    overflow-y: auto;
+    padding: max(12px, env(safe-area-inset-top))
+      max(12px, env(safe-area-inset-right))
+      max(12px, env(safe-area-inset-bottom))
+      max(12px, env(safe-area-inset-left));
+  }
+  #menu > * {
+    flex-shrink: 0;
+  }
+  .driving,
   .driving #touch {
+    touch-action: none;
+    overscroll-behavior: none;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+  }
+  .driving #touch {
+    --touch-scale: 1;
+    --touch-opacity: 0.72;
+    --steer: max(48px, calc(clamp(57px, 10vw, 88px) * var(--touch-scale)));
+    --pedal: max(44px, calc(clamp(46px, 8vw, 62px) * var(--touch-scale)));
+    --drift-size: max(
+      61px,
+      calc(clamp(76px, 12vw, 104px) * var(--touch-scale))
+    );
     position: absolute;
     z-index: 4;
     inset: auto 0 0;
-    display: flex;
-    justify-content: space-between;
+    display: grid;
+    grid-template-areas: "direction utility race";
+    grid-template-columns: auto minmax(0, 1fr) auto;
     align-items: end;
-    padding: 8px max(8px, env(safe-area-inset-right))
-      max(10px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left));
-    gap: 5px;
+    padding: 0 max(10px, env(safe-area-inset-right))
+      max(12px, env(safe-area-inset-bottom))
+      max(10px, env(safe-area-inset-left));
     pointer-events: none;
   }
-  #touch div {
+  .driving #touch.inverted {
+    grid-template-areas: "race utility direction";
+  }
+  .touch-direction {
+    grid-area: direction;
     display: flex;
-    gap: 4px;
-    flex-wrap: wrap;
+    gap: 5px;
+    padding-bottom: 6px;
+  }
+  .touch-race {
+    grid-area: race;
+    display: grid;
+    grid-template-areas: "item drift" "brake throttle";
+    grid-template-columns: var(--pedal) var(--drift-size);
+    gap: 5px 8px;
+    align-items: end;
+    justify-items: center;
+  }
+  .inverted .touch-race {
+    grid-template-areas: "drift item" "throttle brake";
+    grid-template-columns: var(--drift-size) var(--pedal);
+  }
+  .touch-utility {
+    grid-area: utility;
+    display: flex;
     justify-content: center;
+    gap: 5px;
   }
   #touch button {
+    --ink: 20 46 68;
+    --rim: #abd6e8af;
+    --glow: transparent;
+    position: relative;
+    display: grid;
+    justify-items: center;
+    align-content: center;
+    width: var(--pedal);
+    height: var(--pedal);
+    gap: 0;
+    padding: 0;
+    color: white;
+    font:
+      800 10px/1.12 system-ui,
+      sans-serif;
+    border: 1px solid var(--rim);
+    background: rgb(var(--ink) / var(--touch-opacity));
+    border-radius: 50%;
+    box-shadow:
+      inset 0 -3px #061e4370,
+      0 2px 5px #10253865,
+      0 0 14px var(--glow);
+    text-shadow: 0 1px 3px #102d3d;
     pointer-events: auto;
     touch-action: none;
-    user-select: none;
-    min-width: 38px;
-    min-height: 42px;
-    padding: 6px;
-    font-size: 12px;
-    border-radius: 9px;
-    border: 1px solid #ffffff70;
+    -webkit-tap-highlight-color: transparent;
+    transition:
+      transform 80ms,
+      box-shadow 100ms,
+      background-color 100ms;
   }
-  #touch button[data-key^="Arrow"] {
+  #touch button:active,
+  #touch button.is-held {
+    transform: scale(0.93);
+    background: rgb(var(--ink) / max(0.84, var(--touch-opacity)));
+    box-shadow:
+      inset 0 0 0 2px #fff6,
+      0 0 19px var(--glow);
+  }
+  #touch svg {
+    width: 26px;
+    height: 26px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2.8;
+    stroke-linejoin: round;
+    stroke-linecap: round;
+    pointer-events: none;
+  }
+  #touch .touch-direction button {
+    --ink: 25 63 98;
+    width: var(--steer);
+    height: max(44px, calc(var(--steer) * 0.87));
+  }
+  #touch .direction-left {
+    border-radius: 40% 13% 13% 40%;
+  }
+  #touch .direction-right {
+    border-radius: 13% 40% 40% 13%;
+  }
+  #touch .touch-direction svg {
+    width: 45%;
+    height: auto;
+  }
+  #touch .touch-drift {
+    grid-area: drift;
+    --ink: 186 65 7;
+    --rim: #ffdeab;
+    width: var(--drift-size);
+    height: var(--drift-size);
+    border-width: 2px;
+    font-style: italic;
+    font-size: clamp(13px, 2.5vw, 21px);
+    text-transform: uppercase;
+  }
+  #touch .touch-drift.is-drifting {
+    --glow: #ff8d37;
+  }
+  #touch .touch-drift[data-tier="1"] {
+    --ink: 157 109 0;
+    --rim: #fff1af;
+    --glow: #ffd746;
+  }
+  #touch .touch-drift[data-tier="2"] {
+    --ink: 11 93 171;
+    --rim: #9eefff;
+    --glow: #42baff;
+  }
+  #touch .touch-drift[data-tier="3"] {
+    --ink: 174 28 50;
+    --rim: #ffbdb2;
+    --glow: #ff454c;
+  }
+  #touch .touch-throttle {
+    grid-area: throttle;
+    --ink: 20 103 85;
+  }
+  #touch.automatic .touch-throttle::after {
+    content: "AUTO";
+    position: absolute;
+    top: -4px;
+    right: -5px;
+    color: #162925;
+    background: #cbffe7;
+    text-shadow: none;
+    border-radius: 6px;
+    padding: 2px 3px;
+    font: 900 8px system-ui;
+  }
+  #touch .touch-brake {
+    grid-area: brake;
+  }
+  #touch .touch-item {
+    grid-area: item;
+  }
+  #touch .touch-item-icon {
     font-size: 20px;
-    background: #152c46e8;
-    color: #fff;
+    height: 25px;
+    display: grid;
+    place-items: center;
+  }
+  #touch .touch-item-icon svg {
+    width: 24px;
+    height: 20px;
+    stroke-width: initial;
+  }
+  #touch .touch-utility button {
+    width: 44px;
+    height: 44px;
+    font-size: 18px;
+  }
+  #touch button:disabled {
+    pointer-events: none;
+    opacity: 0.56;
+  }
+  #hud {
+    padding-left: max(8px, env(safe-area-inset-left));
+    padding-right: max(8px, env(safe-area-inset-right));
+    padding-top: max(8px, env(safe-area-inset-top));
+  }
+}
+@media (any-pointer: coarse) and (orientation: portrait) {
+  .touch-utility {
+    position: absolute;
+    left: max(10px, env(safe-area-inset-left));
+    bottom: calc(max(12px, env(safe-area-inset-bottom)) + var(--steer) + 10px);
+  }
+  #touch.inverted .touch-utility {
+    left: auto;
+    right: max(10px, env(safe-area-inset-right));
+  }
+}
+@media (any-pointer: coarse) and (max-width: 360px) {
+  .driving #touch {
+    --steer: clamp(48px, calc(57px * var(--touch-scale)), 20vw);
+    --drift-size: clamp(61px, calc(76px * var(--touch-scale)), 26vw);
+  }
+}
+@media (any-pointer: coarse) and (max-height: 490px) {
+  #menu h1 {
+    font-size: clamp(23px, 6vh, 34px);
+  }
+  #menu {
+    font-size: 12px;
+    gap: 6px;
+  }
+  #play {
+    font-size: 13px;
+    padding: 8px 18px;
+  }
+  #menu p:first-of-type {
+    font-size: 13px;
+  }
+  #menu small {
+    display: none;
+  }
+  #hud {
+    gap: 6px;
   }
 }

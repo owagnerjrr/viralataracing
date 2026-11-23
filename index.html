@@ -2,7 +2,10 @@
 <html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+    <meta
+      name="viewport"
+      content="width=device-width,initial-scale=1.0,viewport-fit=cover"
+    />
     <link rel="icon" href="data:," />
     <title>Vira-Lata Racing — Protótipo</title>
     <link rel="stylesheet" href="./src/style.css" />
@@ -50,19 +53,63 @@
       </div>
       <div id="toast" role="status"></div>
       <div id="touch" aria-label="Controles de corrida">
-        <div>
-          <button data-key="ArrowLeft" aria-label="Esquerda">←</button
-          ><button data-key="ArrowRight" aria-label="Direita">→</button
-          ><button data-key="Space">Drift</button>
+        <div class="touch-direction" role="group" aria-label="Direção">
+          <button
+            class="direction-left"
+            data-key="ArrowLeft"
+            aria-label="Virar à esquerda"
+          >
+            <svg viewBox="0 0 32 32" aria-hidden="true">
+              <path d="M20 6 10 16l10 10" />
+            </svg>
+          </button>
+          <button
+            class="direction-right"
+            data-key="ArrowRight"
+            aria-label="Virar à direita"
+          >
+            <svg viewBox="0 0 32 32" aria-hidden="true">
+              <path d="m12 6 10 10-10 10" />
+            </svg>
+          </button>
         </div>
-        <div>
-          <button data-action="item">Item</button
-          ><button data-action="recover">Repos.</button
-          ><button data-action="pause" aria-label="Pausar">Ⅱ</button>
+        <div class="touch-race" role="group" aria-label="Ações de corrida">
+          <button
+            class="touch-item"
+            data-action="item"
+            aria-label="Sem item disponível"
+            disabled
+          >
+            <span class="touch-item-icon" aria-hidden="true">—</span
+            ><span>Item</span>
+          </button>
+          <button class="touch-drift" data-key="Space" aria-label="Drift">
+            <span>Drift</span>
+          </button>
+          <button
+            class="touch-brake"
+            data-key="ArrowDown"
+            aria-label="Frear ou dar ré"
+          >
+            <svg viewBox="0 0 32 32" aria-hidden="true">
+              <path d="M9 11h14v10H9zM12 14v4m4-4v4m4-4v4" /></svg
+            ><span>Freio</span>
+          </button>
+          <button
+            class="touch-throttle"
+            data-key="ArrowUp"
+            aria-label="Acelerar"
+          >
+            <svg viewBox="0 0 32 32" aria-hidden="true">
+              <path d="m8 20 8-8 8 8m-16-7 8-8 8 8" /></svg
+            ><span>Acelerar</span>
+          </button>
         </div>
-        <div>
-          <button data-key="ArrowDown" aria-label="Frear ou dar ré">↓</button
-          ><button data-key="ArrowUp" aria-label="Acelerar">↑</button>
+        <div class="touch-utility" role="group" aria-label="Atalhos da corrida">
+          <button data-action="recover" aria-label="Reposicionar kart">
+            ↶
+          </button>
+          <button data-action="pause" aria-label="Pausar corrida">Ⅱ</button>
         </div>
       </div>
       <div id="menu">
@@ -81,6 +128,46 @@
           >
           <label><input id="sounds" type="checkbox" checked /> Som</label>
         </div>
+        <details class="mobile-options">
+          <summary>Controles mobile</summary>
+          <fieldset id="mobile-settings">
+            <legend class="sr-only">Personalização dos controles mobile</legend>
+            <label class="touch-range" for="mobile-size"
+              >Tamanho
+              <input
+                id="mobile-size"
+                name="size"
+                type="range"
+                min="80"
+                max="125"
+                step="5"
+                value="100"
+              />
+              <output for="mobile-size">100%</output>
+            </label>
+            <label class="touch-range" for="mobile-opacity"
+              >Opacidade
+              <input
+                id="mobile-opacity"
+                name="opacity"
+                type="range"
+                min="30"
+                max="100"
+                value="72"
+              />
+              <output for="mobile-opacity">72%</output>
+            </label>
+            <label
+              ><input name="auto" type="checkbox" /> Aceleração
+              automática</label
+            >
+            <label
+              ><input name="inverted" type="checkbox" /> Inverter os
+              lados</label
+            >
+            <button type="button" data-mobile-defaults>Restaurar padrão</button>
+          </fieldset>
+        </details>
         <small>WASD ou setas · Espaço · Shift · E · Esc</small>
       </div>
     </div>
