@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import {
   centerline,
+  COURSE_SCALE,
   channelDistance,
   createRiver,
   surfaceAt,
@@ -88,11 +89,11 @@ sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
 sun.shadow.bias = -0.00025;
 sun.shadow.normalBias = 0.035;
-sun.shadow.camera.far = 150;
-sun.shadow.camera.left = -90;
-sun.shadow.camera.right = 90;
-sun.shadow.camera.top = 90;
-sun.shadow.camera.bottom = -90;
+sun.shadow.camera.far = 200;
+sun.shadow.camera.left = -115;
+sun.shadow.camera.right = 115;
+sun.shadow.camera.top = 115;
+sun.shadow.camera.bottom = -115;
 scene.add(sun);
 const solids = [];
 const mat = (c, r = 0.8, m = 0) =>
@@ -150,7 +151,7 @@ function tangent(t) {
     .sub(sample(t - 0.001))
     .normalize();
 }
-const width = 13.2;
+const width = 13.2 * COURSE_SCALE;
 const shoulderWidth = 1.35;
 function ribbon(offset, material, y = 0) {
   let v = [],
@@ -252,7 +253,7 @@ function railPoint(t, side) {
     (width / 2 + shoulderWidth) * side,
   );
 }
-const railSegments = 172;
+const railSegments = Math.round(172 * COURSE_SCALE);
 function makeCurbs() {
   const vertices = [];
   const indices = [];
@@ -356,8 +357,9 @@ for (let j = 0; j < 1; j++) {
     d = tangent(t),
     s = new THREE.Vector3(-d.z, 0, d.x);
   for (let k = 0; k < 8; k++) {
-    let q = p.clone().addScaledVector(s, (k - 3.5) * 1.35);
-    let tile = box(1.35, 0.04, 1.1, (j + k) % 2 ? dark : white, [
+    const tileWidth = width / 8;
+    let q = p.clone().addScaledVector(s, (k - 3.5) * tileWidth);
+    let tile = box(tileWidth, 0.04, 1.1, (j + k) % 2 ? dark : white, [
       q.x,
       0.065,
       q.z,
@@ -373,14 +375,17 @@ function rnd() {
 }
 const canopyMaterials = [leaf, mat(0x437f59), mat(0x76a74b), mat(0x549147)];
 const canopyShape = new THREE.SphereGeometry(1, 18, 12);
-for (let i = 0; i < 155; i++) {
-  const x = (rnd() - 0.5) * 166;
-  const z = (rnd() - 0.5) * 138;
+for (let i = 0; i < 200; i++) {
+  const originalX = (rnd() - 0.5) * 166;
+  const originalZ = (rnd() - 0.5) * 138;
+  const x = originalX * COURSE_SCALE;
+  const z = originalZ * COURSE_SCALE;
   if (
     channelDistance(x, z) < 3.1 ||
-    Math.hypot(x, z) > 101 ||
-    closest(new THREE.Vector3(x, 0, z)).dist < 10.1 ||
-    (x > 16 && x < 41 && z > -16 && z < 8)
+    Math.hypot(originalX, originalZ) > 101 ||
+    closest(new THREE.Vector3(x, 0, z)).dist <
+      width / 2 + shoulderWidth + 2.15 ||
+    (originalX > 16 && originalX < 41 && originalZ > -16 && originalZ < 8)
   )
     continue;
   const height = 2.7 + rnd() * 3.4;
@@ -444,9 +449,9 @@ const hillColors = [mat(0x70a495), mat(0x82b2a5), mat(0x93beb0)];
 for (let i = 0; i < 21; i++) {
   const angle = (i * Math.PI * 2) / 21;
   const hill = mesh(canopyShape, hillColors[i % 3], [
-    Math.cos(angle) * 125,
+    Math.cos(angle) * 125 * COURSE_SCALE,
     -6,
-    Math.sin(angle) * 124,
+    Math.sin(angle) * 124 * COURSE_SCALE,
   ]);
   hill.scale.set(19 + rnd() * 21, 14 + rnd() * 16, 21 + rnd() * 13);
   hill.castShadow = false;
@@ -489,7 +494,7 @@ for (let i = 0; i < 12; i++) {
 }
 // The timing shelter sits in the infield, beyond the inner guardrail.
 const shelter = new THREE.Group();
-shelter.position.set(24, 0, -3);
+shelter.position.set(24 * COURSE_SCALE, 0, -3 * COURSE_SCALE);
 shelter.scale.set(1.5, 1.3, 1.42);
 shelter.rotation.y = -0.46;
 scene.add(shelter);
@@ -671,8 +676,9 @@ for (const t of [
   let p = sample(0),
     d = tangent(0),
     s = new THREE.Vector3(-d.z, 0, d.x);
+  const postOffset = width / 2 + shoulderWidth;
   for (let sign of [-1, 1]) {
-    let q = p.clone().addScaledVector(s, sign * 7);
+    let q = p.clone().addScaledVector(s, sign * postOffset);
     box(0.55, 8.6, 0.55, railMaterial, [q.x, 4.3, q.z]);
     box(1.05, 0.55, 1.05, dark, [q.x, 0.25, q.z]);
     solids.push(rectangle(q.x, q.z, 1.05, 1.05, 0, 8.6));
@@ -695,7 +701,7 @@ for (const t of [
   const banner = mat(0xffffff);
   banner.map = sign;
   const beam = box(
-    14.6,
+    2 * postOffset + 0.6,
     1.36,
     0.55,
     [railMaterial, railMaterial, yellow, yellow, banner, banner],
@@ -1511,7 +1517,10 @@ const itemLanes = [
 for (const [t, lane] of itemLanes) {
   const p = sample(t);
   const direction = tangent(t);
-  p.addScaledVector(new THREE.Vector3(-direction.z, 0, direction.x), lane);
+  p.addScaledVector(
+    new THREE.Vector3(-direction.z, 0, direction.x),
+    lane * COURSE_SCALE,
+  );
   const g = new THREE.Group();
   g.position.set(p.x, 1.35, p.z);
   scene.add(g);
@@ -2371,7 +2380,7 @@ function tick() {
     .addScaledVector(forward, -8.8 - (boosting() ? 1.85 : 0))
     .addScaledVector(
       cameraSide.set(-forward.z, 0, forward.x),
-      2.45 + slide * 1.1,
+      1.05 + slide * 1.1,
     )
     .add(new THREE.Vector3(0, 5.65 + y * 0.2, 0));
   camera.position.lerp(desired, snapCamera ? 1 : 1 - Math.exp(-7 * dt));

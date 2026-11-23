@@ -1,5 +1,7 @@
 import * as THREE from "three";
 
+export const COURSE_SCALE = 4 / 3;
+
 // Original riverside circuit, sampled uniformly by distance for the rails and checkpoints.
 const guide = new THREE.CatmullRomCurve3(
   [
@@ -54,22 +56,39 @@ for (let i = 0; i < 160; i++) {
     point.addScaledVector(guide.getPointAt(t), weight);
     mass += weight;
   }
-  rounded.push(point.divideScalar(mass));
+  rounded.push(point.multiplyScalar(COURSE_SCALE / mass));
 }
 export const centerline = new THREE.CatmullRomCurve3(rounded, true);
 centerline.arcLengthDivisions = 2500;
 
-export const riverCenter = (z) =>
-  1 + Math.sin(z * 0.042) * 7 + Math.sin(z * 0.085 + 0.9) * 2;
-export const riverWidth = (z) =>
-  5.7 +
-  8.7 * Math.exp(-((z - 63) ** 2) / 265) +
-  2.8 * Math.exp(-((z + 15) ** 2) / 320);
+export function riverCenter(z) {
+  const originalZ = z / COURSE_SCALE;
+  return (
+    COURSE_SCALE *
+    (1 +
+      Math.sin(originalZ * 0.042) * 7 +
+      Math.sin(originalZ * 0.085 + 0.9) * 2)
+  );
+}
+export function riverWidth(z) {
+  const originalZ = z / COURSE_SCALE;
+  return (
+    COURSE_SCALE *
+    (5.7 +
+      8.7 * Math.exp(-((originalZ - 63) ** 2) / 265) +
+      2.8 * Math.exp(-((originalZ + 15) ** 2) / 320))
+  );
+}
 export const channelDistance = (x, z) =>
   Math.abs(x - riverCenter(z)) - riverWidth(z);
 
 export function terrainGeometry() {
-  const geometry = new THREE.PlaneGeometry(277, 250, 155, 142);
+  const geometry = new THREE.PlaneGeometry(
+    277 * COURSE_SCALE,
+    250 * COURSE_SCALE,
+    155,
+    142,
+  );
   geometry.rotateX(-Math.PI / 2);
   const positions = geometry.attributes.position;
   const colors = [];
@@ -98,7 +117,7 @@ export function terrainGeometry() {
 }
 
 export function createRiver() {
-  const geometry = new THREE.PlaneGeometry(100, 249, 1, 190);
+  const geometry = new THREE.PlaneGeometry(100, 249 * COURSE_SCALE, 1, 190);
   geometry.rotateX(-Math.PI / 2);
   const positions = geometry.attributes.position;
   for (let i = 0; i < positions.count; i++) {
@@ -141,5 +160,5 @@ export function createRiver() {
 
 export function surfaceAt(point) {
   if (channelDistance(point.x, point.z) < 2.35) return 1;
-  return point.x < -38.5 && point.z < 39 ? 2 : 0;
+  return point.x < -38.5 * COURSE_SCALE && point.z < 39 * COURSE_SCALE ? 2 : 0;
 }
