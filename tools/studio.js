@@ -201,6 +201,79 @@ function createKart() {
       bolt.rotation.z = -side * 0.14;
     }
   }
+  const underframe = mat(0x384540, 0.48, 0.65);
+  const exhaustSteel = mat(0x9fb0ab, 0.28, 0.77);
+  for (const side of [-1, 1]) {
+    const rail = new THREE.CatmullRomCurve3(
+      [
+        [side * 0.64, 0.49, -2.27],
+        [side * 1.12, 0.48, -1.69],
+        [side * 1.27, 0.48, -0.73],
+        [side * 1.33, 0.48, 1.07],
+        [side * 1.06, 0.5, 1.97],
+        [side * 0.62, 0.59, 2.22],
+      ].map((p) => new THREE.Vector3(...p)),
+    );
+    mesh(
+      new THREE.TubeGeometry(rail, 36, 0.066, 9, false),
+      underframe,
+      [0, 0, 0],
+      body,
+    );
+    const manifold = new THREE.CatmullRomCurve3(
+      [
+        [side * 0.32, 1.07, 1.67],
+        [side * 0.5, 1.1, 1.82],
+        [side * 0.73, 0.92, 2.02],
+        [side * 0.91, 0.74, 2.16],
+      ].map((p) => new THREE.Vector3(...p)),
+    );
+    mesh(
+      new THREE.TubeGeometry(manifold, 25, 0.082, 10, false),
+      exhaustSteel,
+      [0, 0, 0],
+      body,
+    );
+    for (const z of [-1.5, 1.5]) {
+      const axleBar = cyl(
+        0.038,
+        0.053,
+        0.72,
+        exhaustSteel,
+        [side * 0.99, 0.615, z],
+        body,
+      );
+      axleBar.rotation.z = Math.PI / 2;
+    }
+  }
+  for (const x of [-0.29, 0, 0.29]) {
+    mesh(
+      loft(
+        [
+          [0, 0.98, 1.38, 0.027, 0.024],
+          [0, 1.05, 1.58, 0.14, 0.118],
+          [0, 1.13, 1.8, 0.141, 0.146],
+          [0, 1.13, 1.98, 0.121, 0.087],
+          [0, 1.04, 2.07, 0.012, 0.013],
+        ],
+        0.67,
+      ),
+      underframe,
+      [x, 0, 0],
+      body,
+    );
+    for (let i = 0; i < 4; i++) {
+      const fin = box(
+        0.25,
+        0.018,
+        0.025,
+        exhaustSteel,
+        [x, 1.27, 1.67 + i * 0.073],
+        body,
+      );
+      fin.rotation.x = 0.16;
+    }
+  }
   const radiator = mesh(
     loft(
       [
@@ -597,7 +670,7 @@ function createKart() {
   box(0.83, 0.11, 0.065, chrome, [0, 0, 0], wheelFace);
   box(0.11, 0.45, 0.065, chrome, [0, -0.23, 0], wheelFace);
   sphere(0.13, yellow, [0, 0, 0.05], wheelFace);
-  steering.position.set(0, 2.26, -1.66);
+  steering.position.set(0, 2.205, -1.635);
 
   body.name = "Body";
   wheelFace.name = "SteeringWheel";
@@ -820,6 +893,77 @@ function paintedHead(cat, material) {
   return { geometry, skin };
 }
 
+const bandanaTexture = paintTexture(256, (ctx, s) => {
+  ctx.fillStyle = "#256c40";
+  ctx.fillRect(0, 0, s, s);
+  ctx.strokeStyle = "#e5be59";
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.moveTo(5, 6);
+  ctx.lineTo(251, 6);
+  ctx.lineTo(128, 242);
+  ctx.closePath();
+  ctx.stroke();
+  ctx.fillStyle = "#f1d28a";
+  for (const [x, y, r] of [
+    [128, 108, 19],
+    [99, 82, 10],
+    [118, 67, 10],
+    [140, 67, 10],
+    [158, 84, 10],
+  ]) {
+    ctx.beginPath();
+    ctx.ellipse(x, y, r, r * 0.81, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.strokeStyle = "#ffffff18";
+  ctx.lineWidth = 1;
+  for (let i = 0; i < 256; i += 4) {
+    ctx.beginPath();
+    ctx.moveTo(0, i);
+    ctx.lineTo(s, i);
+    ctx.stroke();
+  }
+});
+const bandanaMaterial = new THREE.MeshStandardMaterial({
+  map: bandanaTexture,
+  roughness: 0.87,
+  side: THREE.DoubleSide,
+});
+function bandanaPanel(root) {
+  const g = new THREE.BufferGeometry();
+  const positions = [],
+    uv = [],
+    indices = [];
+  const cols = 20,
+    rows = 11;
+  for (let i = 0; i <= rows; i++) {
+    const v = i / rows;
+    for (let j = 0; j <= cols; j++) {
+      const u = j / cols,
+        w = u * 2 - 1;
+      const x = w * (0.324 * (1 - v) + 0.012);
+      const y = 1.186 - v * 0.415 - Math.abs(w) * (1 - v) * 0.07;
+      const z =
+        -0.222 -
+        0.145 * (1 - w * w) -
+        0.074 * v +
+        0.016 * Math.sin(w * 9) * (1 - v);
+      positions.push(x, y, z);
+      uv.push(0.5 + w * (1 - v) * 0.49, 1 - v);
+      if (i && j) {
+        const a = i * (cols + 1) + j;
+        indices.push(a - cols - 2, a - cols - 1, a - 1, a - cols - 1, a, a - 1);
+      }
+    }
+  }
+  g.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  g.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2));
+  g.setIndex(indices);
+  g.computeVertexNormals();
+  mesh(g, bandanaMaterial, [0, 0, 0], root).name = "BandanaPatinha";
+}
+
 function mascot(cat) {
   const root = new THREE.Group();
   const palette = cat ? catCoat : dogCoat;
@@ -846,6 +990,7 @@ function mascot(cat) {
   head.position.set(0, cat ? 1.52 : 1.48, cat ? -0.06 : -0.09);
   root.add(head);
   const coat = paintedHead(cat, m);
+  head.scale.set(cat ? 0.93 : 1.04, cat ? 0.94 : 1.025, cat ? 0.89 : 1.03);
   mesh(coat.geometry, coat.skin, [0, 0, 0], head);
   if (!cat) {
     furTufts(head, palette.shade, -1, [-0.035, 0.5, 0.035], 4, -1.97);
@@ -916,6 +1061,24 @@ function mascot(cat) {
     [0, 0, 0],
     root,
   );
+  if (!cat) bandanaPanel(root);
+  else {
+    const collarPath = new THREE.CatmullRomCurve3(
+      [
+        [-0.23, 1.13, -0.24],
+        [-0.14, 1.085, -0.327],
+        [0.03, 1.067, -0.345],
+        [0.18, 1.105, -0.31],
+        [0.23, 1.16, -0.22],
+      ].map((p) => new THREE.Vector3(...p)),
+    );
+    mesh(
+      new THREE.TubeGeometry(collarPath, 20, 0.042, 8, false),
+      brass,
+      [0, 0, 0],
+      root,
+    );
+  }
   const ears = [];
 
   const eyeGroups = [];
@@ -939,8 +1102,8 @@ function mascot(cat) {
           [0, 0.08, 0, 0.16, 0.131],
           [0, 0.21, 0.035, 0.21, 0.12],
           [0, 0.08, 0.21, 0.225, 0.13],
-          [0, -0.36, 0.31, 0.188, 0.097],
-          [0, -0.6, 0.34, 0.012, 0.013],
+          [0, -0.31, 0.27, 0.212, 0.105],
+          [0, -0.55, 0.3, 0.021, 0.022],
         ];
     const earMesh = mesh(
       bendableLoft(profile, 0.76, [side * 0.078, -0.095, 0.185]),
@@ -1225,6 +1388,72 @@ function mascot(cat) {
   };
 }
 
+function smoothArm(shoulder, elbow, wrist, material, index) {
+  const points = [
+    [shoulder.x, shoulder.y + 0.045, shoulder.z + 0.035, 0.034, 0.04],
+    [...shoulder.toArray(), 0.119, 0.111],
+    [...shoulder.clone().lerp(elbow, 0.53).toArray(), 0.127, 0.117],
+    [...elbow.toArray(), 0.108, 0.105],
+    [...elbow.clone().lerp(wrist, 0.48).toArray(), 0.123, 0.112],
+    [...wrist.toArray(), 0.102, 0.086],
+    [
+      ...wrist
+        .clone()
+        .add(new THREE.Vector3(0, -0.035, -0.031))
+        .toArray(),
+      0.045,
+      0.039,
+    ],
+  ];
+  const geometry = loft(points, 0.93);
+  const indices = [],
+    weights = [];
+  const count = geometry.attributes.position.count;
+  for (let i = 0; i < count; i++) {
+    const t = Math.floor(i / 32) / (count / 32 - 1);
+    const elbowWeight = THREE.MathUtils.smoothstep(t, 0.18, 0.63);
+    const wristWeight = THREE.MathUtils.smoothstep(t, 0.58, 1);
+    indices.push(0, 1, 2, 0);
+    weights.push(
+      1 - elbowWeight,
+      elbowWeight * (1 - wristWeight),
+      elbowWeight * wristWeight,
+      0,
+    );
+  }
+  geometry.setAttribute(
+    "skinIndex",
+    new THREE.Uint16BufferAttribute(indices, 4),
+  );
+  geometry.setAttribute(
+    "skinWeight",
+    new THREE.Float32BufferAttribute(weights, 4),
+  );
+  const shoulderBone = new THREE.Bone(),
+    elbowBone = new THREE.Bone(),
+    wristBone = new THREE.Bone();
+  shoulderBone.name = "ShoulderBone" + index;
+  elbowBone.name = "ElbowBone" + index;
+  wristBone.name = "WristBone" + index;
+  shoulderBone.position.copy(shoulder);
+  elbowBone.position.copy(elbow).sub(shoulder);
+  wristBone.position.copy(wrist).sub(elbow);
+  const skin = new THREE.SkinnedMesh(geometry, material);
+  skin.name = "SeamlessArm" + index;
+  skin.userData = {
+    shoulder: shoulder.toArray(),
+    elbow: elbow.toArray(),
+    wrist: wrist.toArray(),
+    side: Math.sign(shoulder.x),
+  };
+  skin.add(shoulderBone);
+  shoulderBone.add(elbowBone);
+  elbowBone.add(wristBone);
+  skin.updateMatrixWorld(true);
+  skin.bind(new THREE.Skeleton([shoulderBone, elbowBone, wristBone]));
+  return skin;
+}
+
 function createMascot(isCat) {
   const m = mascot(isCat);
   const named = {
@@ -1241,22 +1470,12 @@ function createMascot(isCat) {
   for (const [name, node] of Object.entries(named)) node.name = name;
   m.root.name = isCat ? "GatoPreto" : "Caramelo";
   m.arms.forEach(({ upper, lower, paw, shoulder, side }, i) => {
-    upper.name = "UpperArm" + i;
-    lower.name = "Forearm" + i;
     paw.name = "Paw" + i;
-    upper.userData = { shoulder: shoulder.toArray(), side };
-    // Bake a neutral seated pose for standalone GLB previews and authoring tools.
     const elbow = new THREE.Vector3(side * 0.54, 0.67, -0.14);
     paw.position.set(side * 0.42, 0.41, -0.41);
-    const up = new THREE.Vector3(0, 1, 0);
-    const rest = (limb, from, to, width) => {
-      const axis = to.clone().sub(from);
-      limb.position.copy(from).lerp(to, 0.5);
-      limb.scale.set(width, axis.length() * 0.68, width);
-      limb.quaternion.setFromUnitVectors(up, axis.normalize());
-    };
-    rest(upper, shoulder, elbow, 0.132);
-    rest(lower, elbow, paw.position, 0.119);
+    m.root.add(smoothArm(shoulder, elbow, paw.position, upper.material, i));
+    upper.removeFromParent();
+    lower.removeFromParent();
   });
   m.eyeGroups.forEach(({ eye, brow, slit, gaze, lid, side }, i) => {
     lid.name = "Lid" + i;

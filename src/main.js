@@ -62,7 +62,12 @@ const context = canvas.getContext("webgl2", { antialias: true, alpha: false });
 if (!context) throw new Error("WebGL 2 indisponível");
 const renderer = new THREE.WebGLRenderer({ canvas, context });
 renderer.setSize(innerWidth, innerHeight);
-renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setPixelRatio(
+  Math.min(
+    devicePixelRatio,
+    matchMedia("(pointer: coarse)").matches ? 1.35 : 1.75,
+  ),
+);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFShadowMap;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -1192,13 +1197,16 @@ const itemMarkup = {
   banana: "🍌 Banana",
   turbo: turboIcon + " Turbo",
 };
+let celebrationTime = 0;
 function notify(message, selectedItem) {
   const toast = $("toast");
+  if (selectedItem) celebrationTime = 0.65;
   if (selectedItem) toast.innerHTML = itemMarkup[selectedItem];
   else toast.textContent = message;
   toastTime = 1.5;
 }
 function reset() {
+  celebrationTime = 0;
   position.copy(sample(0.015));
   wasOnRamp = false;
   clearMotion();
@@ -1552,13 +1560,27 @@ function shortenChase(target, desired, solids) {
 }
 const handGoal = new THREE.Vector3();
 const elbow = new THREE.Vector3();
-const armAxis = new THREE.Vector3();
-const up = new THREE.Vector3(0, 1, 0);
-function poseLimb(limb, from, to, width) {
-  limb.position.copy(from).lerp(to, 0.5);
-  armAxis.subVectors(to, from);
-  limb.scale.set(width, armAxis.length() * 0.68, width);
-  limb.quaternion.setFromUnitVectors(up, armAxis.normalize());
+const upperDirection = new THREE.Vector3();
+const lowerDirection = new THREE.Vector3();
+const upperInverse = new THREE.Quaternion();
+const lowerRotation = new THREE.Quaternion();
+function poseArm(arm, elbow, hand) {
+  const { upper, lower, wrist, shoulder, upperRest, lowerRest, paw } = arm;
+  upperDirection.subVectors(elbow, shoulder);
+  lowerDirection.subVectors(hand, elbow);
+  upper.quaternion.setFromUnitVectors(
+    upperRest,
+    upperDirection.clone().normalize(),
+  );
+  upperInverse.copy(upper.quaternion).invert();
+  lower.position.copy(upperDirection).applyQuaternion(upperInverse);
+  lowerRotation.setFromUnitVectors(
+    lowerRest,
+    lowerDirection.clone().normalize(),
+  );
+  lower.quaternion.copy(upperInverse).multiply(lowerRotation);
+  wrist.position.copy(lowerDirection).applyQuaternion(lowerRotation.invert());
+  paw.position.copy(hand);
 }
 const streakGeo = new THREE.BufferGeometry();
 const streakPoints = new Float32Array(16 * 6);
@@ -1840,6 +1862,9 @@ function tick() {
   }
   wheelFace.rotation.z = -turn * 0.38;
   const jump = Math.sin((Math.PI * swap) / swapDuration);
+  if (running && !paused)
+    celebrationTime = Math.max(0, celebrationTime - visualDt);
+  const cheer = Math.sin(Math.PI * (1 - celebrationTime / 0.65));
   for (const m of [dog, cat]) {
     const throwing = m === thrower ? Math.sin((Math.PI * throwTime) / 0.48) : 0;
     const isPilot = m === (pilotDog ? dog : cat);
@@ -1857,7 +1882,7 @@ function tick() {
     m.tail.rotation.x = Math.sin(now * 5.5) * 0.12 + vy * 0.029;
     const startled = impactTime > 0.12 || slipTime > 0.25 || vy > 2.75;
     const tier = chargedTier();
-    const delighted = boosting() && !isPilot;
+    const delighted = !isPilot && (boosting() || celebrationTime > 0);
     const open = startled
       ? 0.64
       : delighted
@@ -1934,7 +1959,8 @@ function tick() {
           1,
         );
     }
-    for (const { shoulder, upper, lower, paw, side } of m.arms) {
+    for (const arm of m.arms) {
+      const { shoulder, side } = arm;
       if (isPilot && swap === 0) {
         handGoal.set(side * 0.46, 0.17, 0.014);
         wheelFace.localToWorld(handGoal);
@@ -1959,13 +1985,12 @@ function tick() {
         handGoal.x += side * throwing * 0.34;
         handGoal.y += throwing * 0.54;
         handGoal.z += throwing * 0.66;
+        if (!isPilot && swap === 0) handGoal.y += cheer * 0.24;
       }
       elbow.copy(shoulder).lerp(handGoal, 0.48);
       elbow.x += side * 0.11;
       elbow.y -= 0.15;
-      poseLimb(upper, shoulder, elbow, 0.132);
-      poseLimb(lower, elbow, handGoal, 0.119);
-      paw.position.copy(handGoal);
+      poseArm(arm, elbow, handGoal);
     }
   }
   tailLamp.emissiveIntensity = held("KeyS") || held("ArrowDown") ? 1.45 : 0.45;

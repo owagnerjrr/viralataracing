@@ -4,9 +4,9 @@ import { MeshoptDecoder } from "three/addons/libs/meshopt_decoder.module.js";
 
 const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
 const files = [
-  "characters/Caramelo",
-  "characters/GatoPreto",
-  "KartRibeirao",
+  "caramelo_final",
+  "gato_preto_final",
+  "kart_duplo_final",
   "Grove",
 ];
 
@@ -40,13 +40,20 @@ function bindMascot(asset, name, cat) {
     openMouth: find("Mouth"),
     scarf: find("ScarfFlex"),
     arms: [0, 1].map((i) => {
-      const upper = find("UpperArm" + i);
+      const skin = find("SeamlessArm" + i);
+      const { shoulder, elbow, wrist, side } = skin.userData;
+      const origin = new Vector3().fromArray(shoulder);
+      const mid = new Vector3().fromArray(elbow);
+      const end = new Vector3().fromArray(wrist);
       return {
-        upper,
-        lower: find("Forearm" + i),
+        upper: find("ShoulderBone" + i),
+        lower: find("ElbowBone" + i),
+        wrist: find("WristBone" + i),
+        upperRest: mid.clone().sub(origin).normalize(),
+        lowerRest: end.sub(mid).normalize(),
         paw: find("Paw" + i),
-        side: upper.userData.side,
-        shoulder: new Vector3().fromArray(upper.userData.shoulder),
+        side,
+        shoulder: origin,
       };
     }),
     eyeGroups: [0, 1].map((i) => {

@@ -19,7 +19,9 @@ for (const name of ["Caramelo", "GatoPreto"]) {
   test(
     name + " preserves the facial rig, tail skin and breathing clip",
     async () => {
-      const asset = await glb("characters/" + name);
+      const asset = await glb(
+        name === "Caramelo" ? "caramelo_final" : "gato_preto_final",
+      );
       const named = new Map(asset.nodes.map((node) => [node.name, node]));
       for (const name of [
         "Jaw",
@@ -28,7 +30,8 @@ for (const name of ["Caramelo", "GatoPreto"]) {
         "Lid0",
         "Lid1",
         "Paw0",
-        "Forearm1",
+        "SeamlessArm0",
+        "SeamlessArm1",
         "Smile",
         "TailFlex",
         "ScarfFlex",
@@ -38,6 +41,15 @@ for (const name of ["Caramelo", "GatoPreto"]) {
         assert.ok(named.has(name), name);
       }
       assert.equal(asset.skins[named.get("TailFlex").skin].joints.length, 2);
+      assert.equal(
+        asset.skins[named.get("SeamlessArm0").skin].joints.length,
+        3,
+      );
+      assert.equal(
+        asset.skins[named.get("SeamlessArm1").skin].joints.length,
+        3,
+      );
+      if (name === "Caramelo") assert.ok(named.has("BandanaPatinha"));
       assert.ok(
         asset.meshes[named.get("Lid0").mesh].primitives[0].targets.length,
       );
@@ -54,7 +66,7 @@ for (const name of ["Caramelo", "GatoPreto"]) {
 }
 
 test("the kart has four wheel rigs, springs, a brake material and glow anchors", async () => {
-  const asset = await glb("KartRibeirao");
+  const asset = await glb("kart_duplo_final");
   const names = new Set(asset.nodes.map((node) => node.name));
   for (const name of [
     "Body",

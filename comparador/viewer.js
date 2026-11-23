@@ -8,11 +8,11 @@ const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
 const sources = {
   dog: [
     new URL("../caramelo.glb", import.meta.url).href,
-    "../models/characters/Caramelo.glb",
+    "../models/caramelo_final.glb",
   ],
   cat: [
     new URL("../gato_preto.glb", import.meta.url).href,
-    "../models/characters/GatoPreto.glb",
+    "../models/gato_preto_final.glb",
   ],
 };
 const ray = new THREE.DirectionalLight(0xffe1bc, 2.7);

@@ -1,4 +1,4 @@
-# Vira-Lata Racing 0.8
+# Vira-Lata Racing 0.9
 
 Use Node.js 24. No terminal, abra a pasta extraída e execute:
 
@@ -32,7 +32,7 @@ Execute `npm test` para verificar a aceleração, marcha à ré, aderência, tur
 
 Os arquivos de autoria e as instruções para regenerar os modelos estão em `tools/`. O jogo carrega os quatro GLBs de `public/models/` automaticamente.
 
-No menu, abra **Comparar personagens** para inspecionar os GLBs enviados e as versões usadas na corrida. O comparador mantém os originais na raiz e normaliza a altura apenas na apresentação. Os dois modelos usados pela corrida estão em `public/models/characters/`.
+No menu, abra **Comparar personagens** para inspecionar os GLBs enviados e as versões usadas na corrida. O comparador mantém os originais na raiz e normaliza a altura apenas na apresentação. A corrida carrega `caramelo_final.glb`, `gato_preto_final.glb` e `kart_duplo_final.glb` de `public/models/`.
 
 Execute `npm run build` para gerar `dist/` e `npm run preview` para testar o build por HTTP. O ZIP já inclui o build verificado.
 
