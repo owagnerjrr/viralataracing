@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+    <link rel="icon" href="data:," />
+    <title>Dupla Kart — Protótipo</title>
+    <link rel="stylesheet" href="./src/style.css" />
+  </head>
+  <body>
+    <div id="app">
+      <div id="hud">
+        <div class="brand">
+          🏁 DUPLA <b>KART</b><small>PROTÓTIPO 0.3</small>
+        </div>
+        <div class="stats">
+          <span id="lap">VOLTA 1/3</span><span id="time">00:00.0</span
+          ><span id="speed">0 <small>KM/H</small></span>
+        </div>
+        <div class="crew">
+          <span id="pilot">🐕 Piloto: Caramelo</span
+          ><span id="partner">🐈‍⬛ Itens: Gato Preto</span>
+        </div>
+        <div class="items">
+          <span id="item">🎁 Sem item</span><span id="boost">TURBO ▱▱▱▱▱</span>
+        </div>
+      </div>
+      <div id="help">
+        WASD / SETAS: dirigir · ESPAÇO: derrapar · SHIFT: trocar · E: item · R:
+        reposicionar · ESC: pausar
+      </div>
+      <div id="toast"></div>
+      <div id="touch" aria-label="Controles de corrida">
+        <div>
+          <button data-key="ArrowLeft" aria-label="Esquerda">←</button
+          ><button data-key="ArrowRight" aria-label="Direita">→</button
+          ><button data-key="Space">Drift</button>
+        </div>
+        <div>
+          <button data-action="swap">Trocar</button
+          ><button data-action="item">Item</button
+          ><button data-action="recover">Repos.</button
+          ><button data-action="pause" aria-label="Pausar">Ⅱ</button>
+        </div>
+        <div>
+          <button data-key="ArrowDown" aria-label="Frear ou dar ré">↓</button
+          ><button data-key="ArrowUp" aria-label="Acelerar">↑</button>
+        </div>
+      </div>
+      <div id="menu">
+        <h1>🏁 DUPLA KART</h1>
+        <p>Caramelo & Gato Preto</p>
+        <p id="race-status" role="status">
+          Se o jogo não carregar, abra o endereço informado pelo Vite ou use a
+          versão publicada.
+        </p>
+        <button id="play" disabled>COMEÇAR CORRIDA</button
+        ><button id="reset" disabled>REINICIAR</button>
+        <div class="settings">
+          <label><input type="checkbox" id="shadows" checked /> Sombras</label
+          ><label
+            ><input type="checkbox" id="particles" checked /> Partículas</label
+          >
+        </div>
+        <small>WASD ou setas · Espaço · Shift · E · Esc</small>
+      </div>
+    </div>
+    <script type="module" src="./src/bootstrap.js"></script>
+    <noscript>Ative o JavaScript para jogar Dupla Kart.</noscript>
+  </body>
+</html>
