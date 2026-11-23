@@ -473,13 +473,11 @@ button:disabled {
     touch-action: none;
     -webkit-tap-highlight-color: transparent;
     transition:
-      transform 80ms,
       box-shadow 100ms,
       background-color 100ms;
   }
   #touch button:active,
   #touch button.is-held {
-    transform: scale(0.93);
     background: rgb(var(--ink) / max(0.84, var(--touch-opacity)));
     box-shadow:
       inset 0 0 0 2px #fff6,
