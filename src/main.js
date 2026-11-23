@@ -1886,12 +1886,21 @@ function tick() {
       0,
       1,
     );
-    for (const [i, { eye, brow, slit, gaze, side }] of m.eyeGroups.entries()) {
+    for (const [
+      i,
+      { eye, brow, slit, gaze, lid, side },
+    ] of m.eyeGroups.entries()) {
       const blink =
         Math.max(0, Math.cos(now * 1.74 + 1.1 + Number(m.cat)) - 0.985) / 0.015;
-      eye.scale.y =
-        (startled ? 1.14 : boosting() || tier ? 0.92 - tier * 0.065 : 1) *
-        (1 - blink * 0.91);
+      eye.scale.y = startled
+        ? 1.12
+        : boosting() || tier
+          ? 0.94 - tier * 0.047
+          : 1;
+      lid.morphTargetInfluences[0] = Math.max(
+        blink * 0.93,
+        startled ? 0 : tier * 0.039,
+      );
       gaze.position.x = THREE.MathUtils.lerp(
         gaze.position.x,
         turn * 0.044 + Math.sin(now * 3.1) * 0.014 + jump * side * 0.02,

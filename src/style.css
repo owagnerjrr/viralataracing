@@ -247,6 +247,11 @@ button {
 #menu small {
   opacity: 0.8;
 }
+.model-viewer-link {
+  color: #ffe29c;
+  font-size: 13px;
+  text-underline-offset: 3px;
+}
 @media (max-width: 690px) {
   #hud {
     grid-template-columns: 1fr;

@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" href="data:," />
+    <title>Comparador de personagens | Vira-Lata Racing</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <main>
+      <header>
+        <a href="../index.html">← Voltar ao jogo</a>
+        <h1>Comparador de personagens</h1>
+        <div class="controls">
+          <label
+            >Personagem
+            <select id="character">
+              <option value="dog">Cachorro Caramelo</option>
+              <option value="cat">Gato Preto</option>
+            </select>
+          </label>
+          <label
+            >Vista
+            <select id="angle">
+              <option value="0">Frente</option>
+              <option value="40">Três quartos</option>
+              <option value="90">Perfil</option>
+              <option value="180">Costas</option>
+            </select>
+          </label>
+          <label><input id="animate" type="checkbox" checked /> Animar</label>
+        </div>
+      </header>
+      <div class="comparison">
+        <section>
+          <h2>GLB enviado</h2>
+          <div class="view" id="original"></div>
+          <p id="original-facts"></p>
+        </section>
+        <section>
+          <h2>Versão integrada</h2>
+          <div class="view" id="integrated"></div>
+          <p id="integrated-facts"></p>
+        </section>
+      </div>
+      <p id="status" role="status">Carregando modelos…</p>
+      <p>
+        A altura foi normalizada para comparar anatomia e acabamento. As medidas
+        abaixo de cada modelo são as dimensões originais no GLB, após alinhar o
+        eixo vertical.
+      </p>
+    </main>
+    <script type="module" src="./viewer.js"></script>
+  </body>
+</html>
