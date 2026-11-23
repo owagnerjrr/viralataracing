@@ -1,4 +1,4 @@
-# Vira-Lata Racing 0.5
+# Vira-Lata Racing 0.5.1
 
 Use Node.js 24. No terminal, abra a pasta extraída e execute:
 

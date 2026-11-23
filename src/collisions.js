@@ -1,4 +1,6 @@
 // Static XZ collision with a multi-circle chassis and a bounded movement step.
+export const KART_SCALE = 0.78;
+
 const chassis = [
   { lateral: 0, longitudinal: -0.97, radius: 0.99 },
   { lateral: 0, longitudinal: 0, radius: 1.13 },
@@ -10,7 +12,11 @@ const chassis = [
       radius: 0.41,
     })),
   ),
-];
+].map(({ lateral, longitudinal, radius }) => ({
+  lateral: lateral * KART_SCALE,
+  longitudinal: longitudinal * KART_SCALE,
+  radius: radius * KART_SCALE,
+}));
 
 export function rectangle(x, z, width, length, angle, height) {
   return {
@@ -74,7 +80,7 @@ export function moveKart(position, motion, heading, y, dt, solids) {
     position.addScaledVector(motion, stepTime);
     const nearby = solids.filter(
       (solid) =>
-        y + 0.12 < solid.height &&
+        y + 0.12 * KART_SCALE < solid.height &&
         Math.abs(solid.x - position.x) < solid.reach &&
         Math.abs(solid.z - position.z) < solid.reach,
     );

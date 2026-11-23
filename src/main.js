@@ -16,7 +16,7 @@ import {
 } from "./sculpt.js";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
-import { moveKart, rectangle, trunk } from "./collisions.js";
+import { KART_SCALE, moveKart, rectangle, trunk } from "./collisions.js";
 import {
   bananaGeometry,
   loft,
@@ -744,6 +744,7 @@ function batchScenery() {
 }
 batchScenery();
 const kart = new THREE.Group();
+kart.scale.setScalar(KART_SCALE);
 scene.add(kart);
 const body = new THREE.Group();
 kart.add(body);
@@ -1779,8 +1780,8 @@ function useItem() {
   } else {
     const g = makeBanana();
     const f = new THREE.Vector3(Math.sin(heading), 0, Math.cos(heading));
-    g.position.copy(position).addScaledVector(f, -2.34);
-    g.position.y = y + 1.3;
+    g.position.copy(position).addScaledVector(f, -2.34 * KART_SCALE);
+    g.position.y = y + 1.3 * KART_SCALE;
     g.rotation.y = heading;
     scene.add(g);
     hazards.push({ g, life: 30, lift: 2.1, motion: f.multiplyScalar(-4.6) });
@@ -1951,12 +1952,13 @@ function updateDust(dt, active) {
     );
     puff.rotation.y = heading + slide;
     puff.position.copy(position);
-    puff.position.x -= Math.sin(heading) * 1.25;
-    puff.position.z -= Math.cos(heading) * 1.25;
-    const spread = (dustIndex % 2 ? 1 : -1) * (boosting() ? 0.77 : 1.09);
+    puff.position.x -= Math.sin(heading) * 1.25 * KART_SCALE;
+    puff.position.z -= Math.cos(heading) * 1.25 * KART_SCALE;
+    const spread =
+      (dustIndex % 2 ? 1 : -1) * (boosting() ? 0.77 : 1.09) * KART_SCALE;
     puff.position.x += Math.cos(heading) * spread;
     puff.position.z -= Math.sin(heading) * spread;
-    puff.position.y = y + (boosting() ? 0.54 : 0.25);
+    puff.position.y = y + (boosting() ? 0.54 : 0.25) * KART_SCALE;
     dustIndex = (dustIndex + 1) % dust.length;
     dustDelay = 0.035;
   }
@@ -2166,7 +2168,7 @@ function tick() {
         hazard.life < 29.25 &&
         hazard.g.position.y === 0 &&
         y < 0.38 &&
-        hazard.g.position.distanceTo(position) < 1.52
+        hazard.g.position.distanceTo(position) < 0.45 + 1.07 * KART_SCALE
       ) {
         stun = 0.8;
         slipTime = 0.72;
@@ -2239,7 +2241,8 @@ function tick() {
     1 - Math.exp(-11 * dt),
   );
   for (let w of wheels) {
-    if (running && !paused) w.axle.rotation.x += (velocity * dt) / 0.55;
+    if (running && !paused)
+      w.axle.rotation.x += (velocity * dt) / (0.55 * KART_SCALE);
     w.pivot.rotation.y = w.front ? -turn * 0.4 : 0;
     const suspension =
       0.605 +
@@ -2375,7 +2378,7 @@ function tick() {
   snapCamera = false;
   camTarget
     .copy(kart.position)
-    .add(new THREE.Vector3(0, 2.2, 0))
+    .add(new THREE.Vector3(0, 2.2 * KART_SCALE, 0))
     .addScaledVector(forward, 4);
   camera.lookAt(camTarget);
   camera.fov = THREE.MathUtils.lerp(camera.fov, boosting() ? 76 : 68, 0.06);
