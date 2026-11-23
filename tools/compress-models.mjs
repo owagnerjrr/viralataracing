@@ -1,4 +1,4 @@
-import { readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { resolve } from "node:path";
 import { MeshoptEncoder } from "meshoptimizer";
@@ -21,6 +21,11 @@ const components = { SCALAR: 1, VEC2: 2, VEC3: 3, VEC4: 4 };
 await MeshoptEncoder.ready;
 for (const name of ["Caramelo", "GatoPreto", "KartRibeirao", "Grove"]) {
   const file = name + ".glb";
+  const target =
+    name === "Caramelo" || name === "GatoPreto"
+      ? resolve(outputDir, "characters")
+      : outputDir;
+  await mkdir(target, { recursive: true });
   const original = await readFile(resolve(inputDir, file));
   const jsonSize = original.readUInt32LE(12);
   const scene = JSON.parse(original.subarray(20, 20 + jsonSize));
@@ -112,7 +117,7 @@ for (const name of ["Caramelo", "GatoPreto", "KartRibeirao", "Grove"]) {
   binHeader.writeUInt32LE(size, 0);
   binHeader.writeUInt32LE(0x004e4942, 4);
   await writeFile(
-    resolve(outputDir, file),
+    resolve(target, file),
     Buffer.concat([header, padded, binHeader, ...payloads]),
   );
   console.log(file, original.length, "→", 28 + padded.length + size);

@@ -53,7 +53,7 @@ function createKart() {
   kart.add(body);
   body.scale.set(0.9, 0.98, 0.79);
   const chassisPaint = new THREE.MeshPhysicalMaterial({
-    color: 0x34534b,
+    color: 0x24634c,
     metalness: 0.26,
     roughness: 0.27,
     clearcoat: 1,
@@ -82,7 +82,7 @@ function createKart() {
   const copper = mat(0xbb673e, 0.34, 0.58);
   const trim = mat(0xf8d798, 0.42, 0.26);
   const fenderPaint = new THREE.MeshPhysicalMaterial({
-    color: 0x294b4a,
+    color: 0x31554a,
     metalness: 0.31,
     roughness: 0.31,
     clearcoat: 0.75,
@@ -165,6 +165,40 @@ function createKart() {
         body,
       );
       slot.rotation.x = -0.28;
+    }
+  }
+  const stripeMaterial = new THREE.MeshPhysicalMaterial({
+    color: 0xf7cd7b,
+    roughness: 0.36,
+    metalness: 0.2,
+    clearcoat: 0.81,
+  });
+  for (const side of [-1, 1]) {
+    mesh(
+      loft(
+        [
+          [0, 0.68, -1.0, 0.012, 0.012],
+          [0, 0.81, -0.67, 0.13, 0.122],
+          [0, 0.87, 0.14, 0.166, 0.143],
+          [0, 0.81, 0.69, 0.131, 0.12],
+          [0, 0.73, 0.99, 0.014, 0.014],
+        ],
+        0.57,
+      ),
+      stripeMaterial,
+      [side * 1.16, 0, 0],
+      body,
+    );
+    for (const z of [-0.29, 0.24, 0.67]) {
+      const bolt = cyl(
+        0.057,
+        0.057,
+        0.026,
+        chrome,
+        [side * 1.21, 0.964, z],
+        body,
+      );
+      bolt.rotation.z = -side * 0.14;
     }
   }
   const radiator = mesh(
@@ -701,6 +735,91 @@ function furTufts(parent, material, side, origin, count, sweep) {
   }
 }
 
+function eyelid() {
+  const positions = [],
+    closed = [],
+    uv = [],
+    indices = [];
+  const rows = 10,
+    columns = 26;
+  function point(target, polar, angle) {
+    target.push(
+      0.154 * Math.sin(polar) * Math.sin(angle),
+      0.198 * Math.cos(polar),
+      -0.088 - 0.146 * Math.sin(polar) * Math.cos(angle),
+    );
+  }
+  for (let row = 0; row <= rows; row++) {
+    for (let col = 0; col <= columns; col++) {
+      const t = row / rows,
+        u = col / columns;
+      const angle = (u - 0.5) * Math.PI;
+      point(positions, 0.007 + t * 0.47, angle);
+      point(closed, 0.007 + t * 3.124, angle);
+      uv.push(u, 1 - t);
+      if (row && col) {
+        const a = row * (columns + 1) + col;
+        indices.push(
+          a - columns - 2,
+          a - columns - 1,
+          a - 1,
+          a - columns - 1,
+          a,
+          a - 1,
+        );
+      }
+    }
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute(
+    "position",
+    new THREE.Float32BufferAttribute(positions, 3),
+  );
+  geometry.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  const closedGeometry = geometry.clone();
+  closedGeometry.setAttribute(
+    "position",
+    new THREE.Float32BufferAttribute(closed, 3),
+  );
+  closedGeometry.computeVertexNormals();
+  geometry.morphAttributes.position = [closedGeometry.getAttribute("position")];
+  geometry.morphAttributes.normal = [closedGeometry.getAttribute("normal")];
+  return geometry;
+}
+
+function paintedHead(cat, material) {
+  const geometry = headSculpt(cat);
+  const p = geometry.attributes.position;
+  const colors = [];
+  const color = new THREE.Color();
+  const blend = THREE.MathUtils.smoothstep;
+  for (let i = 0; i < p.count; i++) {
+    const x = p.getX(i),
+      y = p.getY(i),
+      z = p.getZ(i);
+    const grain = Math.sin(x * 33 + z * 21) * Math.cos(y * 39 + z * 29) * 0.045;
+    const cheeks = blend(Math.abs(x), 0.24, 0.52) * (1 - blend(y, -0.1, 0.31));
+    const forehead = blend(y, 0.07, 0.55) * (1 - blend(z, -0.4, 0.01));
+    const muzzle = (1 - blend(y, -0.24, 0.02)) * (1 - blend(z, -0.57, -0.25));
+    if (cat) {
+      color.setRGB(0.73 + grain, 0.77 + grain, 0.86 + grain);
+      color.lerp(new THREE.Color(0.37, 0.43, 0.56), forehead * 0.58);
+      color.lerp(new THREE.Color(0.96, 0.85, 0.74), cheeks * 0.31);
+    } else {
+      color.setRGB(1 + grain, 0.84 + grain, 0.66 + grain);
+      color.lerp(new THREE.Color(0.55, 0.426, 0.32), forehead * 0.58);
+      color.lerp(new THREE.Color(1, 0.93, 0.77), muzzle * 0.73 + cheeks * 0.19);
+    }
+    colors.push(color.r, color.g, color.b);
+  }
+  geometry.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
+  const skin = material.clone();
+  skin.vertexColors = true;
+  return { geometry, skin };
+}
+
 function mascot(cat) {
   const root = new THREE.Group();
   const palette = cat ? catCoat : dogCoat;
@@ -726,7 +845,22 @@ function mascot(cat) {
   const head = new THREE.Group();
   head.position.set(0, cat ? 1.52 : 1.48, cat ? -0.06 : -0.09);
   root.add(head);
-  mesh(headSculpt(cat), m, [0, 0, 0], head);
+  const coat = paintedHead(cat, m);
+  mesh(coat.geometry, coat.skin, [0, 0, 0], head);
+  if (!cat) {
+    furTufts(head, palette.shade, -1, [-0.035, 0.5, 0.035], 4, -1.97);
+  } else {
+    for (const side of [-1, 1]) {
+      furTufts(
+        head,
+        palette.shade,
+        side,
+        [side * 0.44, -0.065, -0.17],
+        4,
+        side * 1.02,
+      );
+    }
+  }
   for (const side of [-1, 1]) {
     const vest = mesh(
       loft(
@@ -869,7 +1003,10 @@ function mascot(cat) {
     const brow = sphere(0.114, palette.shade, [side * 0.01, 0.22, -0.037], eye);
     brow.scale.set(1.22, 0.24, 0.43);
     brow.rotation.z = side * 0.14;
-    eyeGroups.push({ eye, brow, slit, gaze, side });
+    const lidMaterial = palette.base.clone();
+    lidMaterial.side = THREE.DoubleSide;
+    const lid = mesh(eyelid(), lidMaterial, [0, 0, 0], eye);
+    eyeGroups.push({ eye, brow, slit, gaze, lid, side });
 
     if (cat) {
       for (let i = 0; i < 3; i++) {
@@ -1108,8 +1245,21 @@ function createMascot(isCat) {
     lower.name = "Forearm" + i;
     paw.name = "Paw" + i;
     upper.userData = { shoulder: shoulder.toArray(), side };
+    // Bake a neutral seated pose for standalone GLB previews and authoring tools.
+    const elbow = new THREE.Vector3(side * 0.54, 0.67, -0.14);
+    paw.position.set(side * 0.42, 0.41, -0.41);
+    const up = new THREE.Vector3(0, 1, 0);
+    const rest = (limb, from, to, width) => {
+      const axis = to.clone().sub(from);
+      limb.position.copy(from).lerp(to, 0.5);
+      limb.scale.set(width, axis.length() * 0.68, width);
+      limb.quaternion.setFromUnitVectors(up, axis.normalize());
+    };
+    rest(upper, shoulder, elbow, 0.132);
+    rest(lower, elbow, paw.position, 0.119);
   });
-  m.eyeGroups.forEach(({ eye, brow, slit, gaze, side }, i) => {
+  m.eyeGroups.forEach(({ eye, brow, slit, gaze, lid, side }, i) => {
+    lid.name = "Lid" + i;
     eye.name = "Eye" + i;
     brow.name = "Brow" + i;
     slit.name = "Pupil" + i;

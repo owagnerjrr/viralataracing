@@ -19,12 +19,14 @@ for (const name of ["Caramelo", "GatoPreto"]) {
   test(
     name + " preserves the facial rig, tail skin and breathing clip",
     async () => {
-      const asset = await glb(name);
+      const asset = await glb("characters/" + name);
       const named = new Map(asset.nodes.map((node) => [node.name, node]));
       for (const name of [
         "Jaw",
         "Eye0",
         "Gaze1",
+        "Lid0",
+        "Lid1",
         "Paw0",
         "Forearm1",
         "Smile",
@@ -36,6 +38,9 @@ for (const name of ["Caramelo", "GatoPreto"]) {
         assert.ok(named.has(name), name);
       }
       assert.equal(asset.skins[named.get("TailFlex").skin].joints.length, 2);
+      assert.ok(
+        asset.meshes[named.get("Lid0").mesh].primitives[0].targets.length,
+      );
       assert.ok(
         asset.meshes[named.get("ScarfFlex").mesh].primitives[0].targets.length,
       );

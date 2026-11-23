@@ -3,7 +3,12 @@ import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { MeshoptDecoder } from "three/addons/libs/meshopt_decoder.module.js";
 
 const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
-const names = ["Caramelo", "GatoPreto", "KartRibeirao", "Grove"];
+const files = [
+  "characters/Caramelo",
+  "characters/GatoPreto",
+  "KartRibeirao",
+  "Grove",
+];
 
 function node(root, name) {
   const match = root.getObjectByName(name);
@@ -51,6 +56,7 @@ function bindMascot(asset, name, cat) {
         brow: find("Brow" + i),
         slit: find("Pupil" + i),
         gaze: find("Gaze" + i),
+        lid: find("Lid" + i),
         side: eye.userData.side,
       };
     }),
@@ -89,7 +95,7 @@ function bindKart(asset) {
 
 export async function loadModels() {
   const [caramelo, gato, kart, grove] = await Promise.all(
-    names.map((name) =>
+    files.map((name) =>
       loader.loadAsync(import.meta.env.BASE_URL + "models/" + name + ".glb"),
     ),
   );
