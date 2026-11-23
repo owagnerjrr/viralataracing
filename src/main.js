@@ -1131,47 +1131,54 @@ function clearBoosts() {
 function cancelDrift() {
   drift = driftSide = neutralTime = 0;
 }
-function updateDrift(dt, turn, brake, offroad, progress) {
-  if (velocity < 8.5 || brake || offroad || stun > 0 || y > 0.12) {
+function updateDrift(dt, turn, brake, offroad) {
+  const driftHeld = Boolean(held("Space"));
+  const invalid = velocity < 8.5 || brake || offroad || stun > 0 || y > 0.12;
+
+  // Releasing the drift button converts accumulated charge into a mini-turbo.
+  // A collision, loss of traction or braking cancels it without a reward.
+  if (invalid) {
     cancelDrift();
     return;
   }
-  if (!held("Space")) {
-    const tier = chargedTier();
-    if (tier > 0) {
-      activeTier = tier;
-      driftBoost = tiers[tier - 1].duration;
-      velocity += cruiseSpeed * tiers[tier - 1].power;
-      driftCue(tier, true);
-      notify(tiers[tier - 1].label + "!");
+  if (!driftHeld) {
+    if (driftSide) {
+      const tier = chargedTier();
+      if (tier > 0) {
+        activeTier = tier;
+        driftBoost = tiers[tier - 1].duration;
+        velocity += cruiseSpeed * tiers[tier - 1].power;
+        driftCue(tier, true);
+        notify(tiers[tier - 1].label + "!");
+      }
     }
     cancelDrift();
     return;
   }
-  if (!driftSide && turn) driftSide = turn;
-  if (!driftSide) return;
-  neutralTime = turn ? 0 : neutralTime + dt;
-  if (neutralTime > 0.27) {
-    cancelDrift();
-  } else if (turn) {
-    const before = tangent(progress - 0.009);
-    const after = tangent(progress + 0.009);
-    const curvature = before.x * after.z - before.z * after.x;
-    if (curvature * driftSide < 0.042) return;
-    const stage = chargedTier();
-    const intensity = THREE.MathUtils.clamp(
-      Math.abs(curvature) * 4.4,
-      0.58,
-      1.16,
-    );
-    const pace = THREE.MathUtils.clamp(velocity / 17, 0.52, 1.17);
-    drift = Math.min(
-      1.6,
-      drift + dt * intensity * pace * (turn === driftSide ? 1 : 0.7),
-    );
-    const next = chargedTier();
-    if (next > stage) driftCue(next);
+
+  // Initiate a slide by holding drift and steering, independently of the
+  // track's predefined curvature (the previous implementation required it).
+  if (!driftSide && turn) {
+    driftSide = turn;
+    neutralTime = 0;
   }
+  if (!driftSide) return;
+
+  // Allow a brief steering correction and counter-steering without losing
+  // the slide. The player still needs to actively control the kart.
+  neutralTime = turn ? 0 : neutralTime + dt;
+  if (neutralTime > 0.65) {
+    cancelDrift();
+    return;
+  }
+
+  const stage = chargedTier();
+  const pace = THREE.MathUtils.clamp(velocity / 22, 0.65, 1.2);
+  const steeringEffort = turn === driftSide ? 1 : turn === -driftSide ? 0.74 : 0.38;
+  const slipEffort = THREE.MathUtils.clamp(Math.abs(vehicle.lateral) / 5, 0, 0.22);
+  drift = Math.min(1.6, drift + dt * pace * (steeringEffort + slipEffort));
+  const next = chargedTier();
+  if (next > stage) driftCue(next);
 }
 const vehicle = new ArcadeVehicle();
 const motion = vehicle.motion;
@@ -1637,7 +1644,7 @@ function tick() {
       turn = Number(right) - Number(left);
     const near = closest(position);
     const offroad = near.dist > width / 2;
-    updateDrift(dt, turn, brake, offroad, near.t);
+    updateDrift(dt, turn, brake, offroad);
     const drifting = driftSide !== 0;
     dustActive = (drifting || offroad) && velocity > 6;
     itemBoost = Math.max(0, itemBoost - dt);
