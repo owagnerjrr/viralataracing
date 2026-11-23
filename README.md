@@ -1,4 +1,4 @@
-# Vira-Lata Racing 0.4
+# Vira-Lata Racing 0.5
 
 Use Node.js 24. No terminal, abra a pasta extraída e execute:
 
@@ -24,7 +24,7 @@ Em telas sensíveis ao toque, os botões aparecem durante a corrida.
 
 Cada personagem leva um item. A caixa de interrogação abastece primeiro o parceiro, se ele tiver espaço, e depois o piloto. O contorno amarelo indica o inventário que pode ser usado. A troca de assentos mantém os dois itens.
 
-Na curva longa, mantenha o drift para passar pelas faíscas azuis, laranjas e roxas. O mini-turbo sai ao soltar Espaço. Use o raio amarelo do inventário para ativar o turbo coletável.
+Na Volta do Ribeirão, a curva longa do lado direito permite carregar os três níveis de drift. As faíscas mudam de amarelo para azul e vermelho. Solte Espaço para liberar o mini-turbo. Cada nível eleva o limite de velocidade em 15%, 25% ou 40% por 0,8 s, 1,5 s ou 2,5 s, respectivamente. Use o raio amarelo do inventário para ativar o turbo de item.
 
 ## Build e Vercel
 

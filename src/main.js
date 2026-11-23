@@ -1,4 +1,19 @@
 import * as THREE from "three";
+import {
+  centerline,
+  channelDistance,
+  createRiver,
+  surfaceAt,
+  terrainGeometry,
+} from "./course.js";
+import {
+  bendableLoft,
+  bodySculpt,
+  coatPalette,
+  headSculpt,
+  muzzleSculpt,
+  pawSculpt,
+} from "./sculpt.js";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { moveKart, rectangle, trunk } from "./collisions.js";
@@ -116,33 +131,14 @@ green.map = grassMap;
 green.color.setHex(0xbcd98c);
 roadMat.map = surfaceTexture("#777d89", ["#808490", "#6d7380", "#747987"]);
 roadMat.color.setHex(0xc7cbd6);
-box(260, 0.15, 260, green, [0, -0.17, 0]);
-const N = 360;
-const course = new THREE.CatmullRomCurve3(
-  [
-    [-28, -29],
-    [-2, -29],
-    [21, -32],
-    [38, -28],
-    [49, -15],
-    [53, 3],
-    [49, 21],
-    [36, 33],
-    [17, 35],
-    [0, 26],
-    [-16, 24],
-    [-35, 32],
-    [-50, 25],
-    [-56, 12],
-    [-51, 0],
-    [-55, -13],
-    [-48, -25],
-  ].map(([x, z]) => new THREE.Vector3(x, 0, z)),
-  true,
-  "centripetal",
-);
-course.arcLengthDivisions = 1800;
-const track = course.getSpacedPoints(N).slice(0, N);
+const terrain = new THREE.Mesh(terrainGeometry(), green);
+green.vertexColors = true;
+terrain.receiveShadow = true;
+scene.add(terrain);
+const river = createRiver();
+scene.add(river);
+const N = 500;
+const track = centerline.getSpacedPoints(N).slice(0, N);
 function sample(t) {
   let f = (((t % 1) + 1) % 1) * N,
     i = Math.floor(f),
@@ -154,7 +150,7 @@ function tangent(t) {
     .sub(sample(t - 0.001))
     .normalize();
 }
-const width = 12.6;
+const width = 13.2;
 const shoulderWidth = 1.35;
 function ribbon(offset, material, y = 0) {
   let v = [],
@@ -184,6 +180,28 @@ function ribbon(offset, material, y = 0) {
   o.receiveShadow = true;
   scene.add(o);
 }
+const bridgeDeck = mat(0xcba77e, 0.78);
+bridgeDeck.map = paintTexture(256, (ctx, size) => {
+  ctx.fillStyle = "#ab8764";
+  ctx.fillRect(0, 0, size, size);
+  for (let i = 0; i < 12; i++) {
+    const x = (i * size) / 12;
+    ctx.fillStyle = ["#bc956d", "#c9a47a", "#b18765", "#b8976e"][i % 4];
+    ctx.fillRect(x + 2, 0, size / 12 - 2, size);
+    ctx.fillStyle = "#e5c397";
+    ctx.fillRect(x + 2, 0, 2, size);
+    ctx.fillStyle = "#53422f";
+    for (const y of [13, 119, 241]) ctx.fillRect(x + size / 24, y, 3, 3);
+  }
+});
+bridgeDeck.map.wrapS = bridgeDeck.map.wrapT = THREE.RepeatWrapping;
+const sandRoad = mat(0xffecce, 0.95);
+sandRoad.map = surfaceTexture("#cba87b", [
+  "#ddbd92",
+  "#bc9a75",
+  "#d5b081",
+  "#e0c095",
+]);
 function trackSurface() {
   let v = [],
     uv = [],
@@ -208,14 +226,25 @@ function trackSurface() {
   g.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2));
   g.setIndex(idx);
   g.computeVertexNormals();
-  let o = new THREE.Mesh(g, roadMat);
+  let first = 0;
+  let material = surfaceAt(sample(0.5 / N));
+  for (let i = 1; i <= N; i++) {
+    const next = i === N ? -1 : surfaceAt(sample((i + 0.5) / N));
+    if (next === material) continue;
+    g.addGroup(first * 6, (i - first) * 6, material);
+    material = next;
+    first = i;
+  }
+  let o = new THREE.Mesh(g, [roadMat, bridgeDeck, sandRoad]);
   o.receiveShadow = true;
   scene.add(o);
 }
 trackSurface();
 ribbon(width / 2, white, 0.035);
 ribbon(-width / 2, white, 0.035);
-const railMaterial = mat(0x103e54, 0.48);
+const railMaterial = mat(0x184850, 0.51);
+const bridgeTrim = mat(0x994e31, 0.77);
+const bridgeSteel = mat(0x525b5c, 0.65, 0.2);
 function railPoint(t, side) {
   const direction = tangent(t);
   return sample(t).addScaledVector(
@@ -223,31 +252,59 @@ function railPoint(t, side) {
     (width / 2 + shoulderWidth) * side,
   );
 }
-for (let i = 0; i < 120; i++) {
-  const t = i / 120;
+const railSegments = 172;
+function makeCurbs() {
+  const vertices = [];
+  const indices = [];
+  const geometry = new THREE.BufferGeometry();
+  for (const side of [-1, 1]) {
+    for (let i = 0; i < N; i++) {
+      const t = i / N;
+      if (surfaceAt(sample((i + 0.5) / N)) === 1) continue;
+      const first = vertices.length / 3;
+      for (const s of [t, (i + 1) / N]) {
+        const p = sample(s),
+          d = tangent(s);
+        for (const edge of [-0.18, 0.31]) {
+          const lateral = (width / 2) * side + edge;
+          vertices.push(p.x - d.z * lateral, 0.054, p.z + d.x * lateral);
+        }
+      }
+      geometry.addGroup(indices.length, 6, Math.floor(i / 4) % 2);
+      indices.push(
+        first,
+        first + 1,
+        first + 2,
+        first + 1,
+        first + 3,
+        first + 2,
+      );
+    }
+  }
+  geometry.setAttribute(
+    "position",
+    new THREE.Float32BufferAttribute(vertices, 3),
+  );
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  const curb = new THREE.Mesh(geometry, [white, red]);
+  curb.receiveShadow = true;
+  scene.add(curb);
+}
+makeCurbs();
+for (let i = 0; i < railSegments; i++) {
+  const t = i / railSegments;
   const center = sample(t);
   const direction = tangent(t);
-  if (i % 4 === 0) {
+  const isBridge = surfaceAt(center) === 1;
+  if (i % 4 === 0 && surfaceAt(center) === 0) {
     const stripe = box(0.15, 0.012, 1.35, yellow, [center.x, 0.031, center.z]);
     stripe.rotation.y = Math.atan2(direction.x, direction.z);
     stripe.castShadow = false;
   }
   for (const side of [-1, 1]) {
-    const edge = center
-      .clone()
-      .addScaledVector(
-        new THREE.Vector3(-direction.z, 0, direction.x),
-        side * (width / 2 + 0.12),
-      );
-    const rumble = box(0.47, 0.04, 2.52, i % 2 ? white : red, [
-      edge.x,
-      0.034,
-      edge.z,
-    ]);
-    rumble.rotation.y = Math.atan2(direction.x, direction.z);
-    rumble.castShadow = false;
     const from = railPoint(t, side);
-    const to = railPoint((i + 1) / 120, side);
+    const to = railPoint((i + 1) / railSegments, side);
     const length = from.distanceTo(to);
     const midpoint = from.clone().lerp(to, 0.5);
     const angle = Math.atan2(to.x - from.x, to.z - from.z);
@@ -255,8 +312,37 @@ for (let i = 0; i < 120; i++) {
     panel.position.copy(midpoint);
     panel.rotation.y = angle;
     scene.add(panel);
-    box(0.69, 0.72, length + 0.04, i % 2 ? red : white, [0, 0.51, 0], panel);
-    box(0.78, 0.16, length + 0.11, railMaterial, [0, 0.95, 0], panel);
+    box(
+      0.69,
+      0.72,
+      length + 0.04,
+      isBridge ? bridgeDeck : i % 2 ? red : white,
+      [0, 0.51, 0],
+      panel,
+    );
+    box(
+      0.78,
+      0.16,
+      length + 0.11,
+      isBridge ? bridgeTrim : railMaterial,
+      [0, 0.95, 0],
+      panel,
+    );
+    if (isBridge) {
+      box(
+        1.04,
+        0.3,
+        length + 0.12,
+        bridgeSteel,
+        [side * 0.15, -0.22, 0],
+        panel,
+      );
+      box(0.41, 0.13, length + 0.12, bridgeTrim, [side * 0.13, 0.26, 0], panel);
+      if (i % 3 === 0) {
+        box(0.58, 1.5, 0.63, bridgeSteel, [side * 0.24, -0.91, 0], panel);
+        box(0.92, 0.12, 0.27, bridgeTrim, [0, 1.033, 0], panel);
+      }
+    }
     if (i % 2 === 0)
       box(0.87, 1.05, 0.24, railMaterial, [0, 0.49, -length / 2], panel);
     solids.push(
@@ -290,7 +376,12 @@ const canopyShape = new THREE.SphereGeometry(1, 18, 12);
 for (let i = 0; i < 155; i++) {
   const x = (rnd() - 0.5) * 166;
   const z = (rnd() - 0.5) * 138;
-  if (Math.hypot(x, z) > 79 || closest(new THREE.Vector3(x, 0, z)).dist < 9.5)
+  if (
+    channelDistance(x, z) < 3.1 ||
+    Math.hypot(x, z) > 101 ||
+    closest(new THREE.Vector3(x, 0, z)).dist < 10.1 ||
+    (x > 16 && x < 41 && z > -16 && z < 8)
+  )
     continue;
   const height = 2.7 + rnd() * 3.4;
   const thick = 0.27 + height * 0.045;
@@ -398,12 +489,13 @@ for (let i = 0; i < 12; i++) {
 }
 // The timing shelter sits in the infield, beyond the inner guardrail.
 const shelter = new THREE.Group();
-shelter.position.set(7, 0, 6);
+shelter.position.set(24, 0, -3);
+shelter.scale.set(1.5, 1.3, 1.42);
 shelter.rotation.y = -0.46;
 scene.add(shelter);
-const timber = mat(0x9e5e47);
+const timber = mat(0xd68840);
 const concrete = mat(0xe1af76);
-const roof = mat(0x155567, 0.47);
+const roof = mat(0xb34537, 0.54);
 const glazing = mat(0x679eac, 0.23, 0.3);
 box(11, 0.69, 6.4, concrete, [0, 0.28, 0], shelter);
 box(7.2, 3.2, 3.8, timber, [0, 2.04, 0.36], shelter);
@@ -439,6 +531,85 @@ for (const side of [-1, 1]) {
 }
 box(8.35, 0.24, 0.19, red, [0, 4.17, 0.36], shelter);
 box(8.65, 0.18, 1.2, concrete, [0, 1.24, -2.05], shelter);
+const marketLettering = mat(0xffffff, 0.6);
+marketLettering.map = paintTexture(512, (ctx, size) => {
+  ctx.fillStyle = "#17464a";
+  ctx.fillRect(0, 0, size, size);
+  ctx.strokeStyle = "#e4ac51";
+  ctx.lineWidth = 15;
+  ctx.strokeRect(17, 17, size - 34, size - 34);
+  ctx.fillStyle = "#ffe3a7";
+  ctx.textAlign = "center";
+  ctx.font = "800 84px system-ui";
+  ctx.fillText("MERCADO", size / 2, 229);
+  ctx.fillText("DAS ÁGUAS", size / 2, 352);
+});
+box(
+  3.65,
+  0.86,
+  0.16,
+  [timber, timber, timber, timber, timber, marketLettering],
+  [0, 3.47, -1.67],
+  shelter,
+);
+for (const side of [-1, 1]) {
+  const awning = new THREE.Group();
+  awning.position.set(side * 2.55, 2.35, -2.49);
+  awning.rotation.x = 0.16;
+  shelter.add(awning);
+  for (let i = 0; i < 7; i++)
+    box(
+      0.26,
+      0.065,
+      1.62,
+      i % 2 ? white : bridgeTrim,
+      [(i - 3) * 0.26, 0, 0],
+      awning,
+    );
+  for (const x of [-0.94, 0.94])
+    box(0.11, 2.12, 0.11, bridgeTrim, [x, -1.09, -0.73], awning);
+  const planter = box(
+    0.89,
+    0.52,
+    0.93,
+    bridgeTrim,
+    [side * 3.99, 0.54, -1.97],
+    shelter,
+  );
+  planter.rotation.y = side * 0.22;
+  for (let j = 0; j < 3; j++) {
+    const fern = mesh(
+      canopyShape,
+      leaf,
+      [side * 3.98 + (j - 1) * 0.21, 0.95 + j * 0.11, -2.06],
+      shelter,
+    );
+    fern.scale.set(0.25, 0.48, 0.26);
+  }
+}
+for (const [x, z] of [
+  [-19, 35],
+  [21, -26],
+  [53, 31],
+  [-29, -20],
+  [-63, 10],
+  [65, -38],
+  [8, 23],
+]) {
+  if (
+    channelDistance(x, z) < 2 ||
+    closest(new THREE.Vector3(x, 0, z)).dist < 10
+  )
+    continue;
+  for (let i = 0; i < 4; i++) {
+    const bush = mesh(canopyShape, canopyMaterials[i], [
+      x + (i - 1.5) * 0.72,
+      0.37 + i * 0.17,
+      z + Math.sin(i) * 0.62,
+    ]);
+    bush.scale.set(0.83, 0.69, 0.87);
+  }
+}
 const chevrons = [-1, 1].map((side) => {
   const material = mat(0xffffff, 0.53);
   material.map = paintTexture(256, (ctx, size) => {
@@ -467,7 +638,9 @@ const chevrons = [-1, 1].map((side) => {
   });
   return material;
 });
-for (const t of [0.19, 0.24, 0.31, 0.43, 0.54, 0.69, 0.8, 0.89, 0.95]) {
+for (const t of [
+  0.09, 0.14, 0.21, 0.29, 0.36, 0.44, 0.51, 0.57, 0.64, 0.71, 0.78, 0.86, 0.94,
+]) {
   const before = tangent(t);
   const after = tangent(t + 0.027);
   const turn = Math.sign(before.x * after.z - before.z * after.x) || 1;
@@ -517,7 +690,7 @@ for (const t of [0.19, 0.24, 0.31, 0.43, 0.54, 0.69, 0.8, 0.89, 0.95]) {
     ctx.textAlign = "center";
     ctx.fillText("VIRA-LATA RACING", 0, 228);
     ctx.font = "700 98px system-ui";
-    ctx.fillText("CURVAS DO BOSQUE", 0, 369);
+    ctx.fillText("VOLTA DO RIBEIRÃO", 0, 369);
   });
   const banner = mat(0xffffff);
   banner.map = sign;
@@ -535,7 +708,13 @@ function batchScenery() {
   const batches = new Map();
   scene.updateMatrixWorld(true);
   scene.traverse((object) => {
-    if (!object.isMesh || object === sky || Array.isArray(object.material))
+    if (
+      !object.isMesh ||
+      object === sky ||
+      object === river ||
+      !object.visible ||
+      Array.isArray(object.material)
+    )
       return;
     const key = [
       object.material.id,
@@ -568,16 +747,29 @@ const kart = new THREE.Group();
 scene.add(kart);
 const body = new THREE.Group();
 kart.add(body);
-body.scale.set(0.94, 1, 0.83);
+body.scale.set(0.9, 0.98, 0.79);
 const chassisPaint = new THREE.MeshPhysicalMaterial({
-  color: 0x0c8898,
+  color: 0x137e64,
   metalness: 0.26,
   roughness: 0.27,
   clearcoat: 1,
   clearcoatRoughness: 0.19,
 });
 const chrome = mat(0xb9dee6, 0.28, 0.61);
-const seat = mat(0x28404c, 0.95);
+const seat = mat(0x223a35, 0.93);
+const pearl = new THREE.MeshPhysicalMaterial({
+  color: 0xe6d19c,
+  roughness: 0.32,
+  metalness: 0.16,
+  clearcoat: 0.82,
+});
+const tireMaterial = mat(0x282c32, 0.97);
+const milled = mat(0x95b7af, 0.45, 0.52);
+const instrument = mat(0x2a454e, 0.3);
+instrument.emissive.setHex(0x338e9a);
+instrument.emissiveIntensity = 0.32;
+const exhaustGlows = [];
+
 const lamp = mat(0xffdfa3, 0.23);
 lamp.emissive.setHex(0xffbe68);
 lamp.emissiveIntensity = 0.55;
@@ -605,10 +797,10 @@ mesh(
   loft(
     [
       [0, 0.76, -2.48, 0.02, 0.02],
-      [0, 0.83, -2.25, 0.89, 0.18],
-      [0, 0.99, -1.48, 1.19, 0.36],
-      [0, 0.86, -0.3, 1.23, 0.27],
-      [0, 0.9, 1.24, 1.27, 0.34],
+      [0, 0.88, -2.25, 0.72, 0.16],
+      [0, 1.013, -1.53, 1.15, 0.37],
+      [0, 0.83, -0.39, 1.17, 0.24],
+      [0, 0.88, 1.24, 1.26, 0.31],
       [0, 0.82, 2.08, 1.09, 0.29],
       [0, 0.8, 2.3, 0.02, 0.02],
     ],
@@ -634,6 +826,61 @@ mesh(
   [0, 0, 0],
   body,
 );
+const bonnet = mesh(
+  loft(
+    [
+      [0, 0.93, -2.38, 0.015, 0.015],
+      [0, 1.007, -2.14, 0.54, 0.095],
+      [0, 1.19, -1.72, 0.71, 0.162],
+      [0, 1.3, -1.27, 0.61, 0.17],
+      [0, 1.36, -0.97, 0.32, 0.09],
+      [0, 1.34, -0.78, 0.012, 0.015],
+    ],
+    0.59,
+  ),
+  pearl,
+  [0, 0, 0],
+  body,
+);
+const intakeRim = mesh(
+  loft(
+    [
+      [0, 0.78, -2.5, 0.01, 0.01],
+      [0, 0.78, -2.465, 0.45, 0.087],
+      [0, 0.78, -2.41, 0.52, 0.085],
+      [0, 0.78, -2.31, 0.025, 0.016],
+    ],
+    0.47,
+  ),
+  milled,
+  [0, 0, 0],
+  body,
+);
+for (let i = -4; i <= 4; i++)
+  box(0.052, 0.112, 0.018, seat, [i * 0.091, 0.78, -2.484], body);
+const dash = mesh(
+  loft(
+    [
+      [0, 1.58, -1.41, 0.015, 0.02],
+      [0, 1.72, -1.36, 0.52, 0.12],
+      [0, 1.74, -1.16, 0.48, 0.12],
+      [0, 1.68, -1.05, 0.02, 0.012],
+    ],
+    0.49,
+  ),
+  bumper,
+  [0, 0, 0],
+  body,
+);
+for (const x of [-0.2, 0, 0.2]) {
+  const meter = sphere(
+    x === 0 ? 0.13 : 0.102,
+    instrument,
+    [x, 1.765, -1.08],
+    body,
+  );
+  meter.scale.set(1, 0.68, 0.32);
+}
 for (const side of [-1, 1]) {
   mesh(
     loft(
@@ -650,7 +897,20 @@ for (const side of [-1, 1]) {
     body,
   );
   const headlight = sphere(0.2, lamp, [side * 0.56, 0.94, -2.263], body);
-  headlight.scale.set(1.4, 0.63, 0.45);
+  headlight.scale.set(1.51, 0.69, 0.39);
+  headlight.rotation.y = side * -0.22;
+  const bezel = sphere(0.238, milled, [side * 0.56, 0.94, -2.238], body);
+  bezel.scale.set(1.36, 0.72, 0.39);
+  bezel.rotation.y = side * -0.22;
+  for (let i = 0; i < 3; i++) {
+    const led = sphere(
+      0.055,
+      lamp,
+      [side * 0.56 + (i - 1) * 0.105, 0.94, -2.327 + i * side * 0.018],
+      body,
+    );
+    led.scale.set(1, 1, 0.39);
+  }
   const brakeLight = sphere(0.18, tailLamp, [side * 0.66, 0.93, 2.09], body);
   brakeLight.scale.set(1.68, 0.65, 0.46);
   const exhaust = cyl(
@@ -664,14 +924,52 @@ for (const side of [-1, 1]) {
   exhaust.rotation.x = Math.PI / 2;
   const opening = cyl(0.094, 0.1, 0.02, dark, [side * 0.93, 0.67, 2.29], body);
   opening.rotation.x = Math.PI / 2;
+  const glow = new THREE.Mesh(
+    new THREE.CircleGeometry(0.095, 24),
+    new THREE.MeshBasicMaterial({
+      color: 0x54d7ff,
+      transparent: true,
+      opacity: 0,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    }),
+  );
+  glow.position.set(side * 0.93, 0.67, 2.31);
+  body.add(glow);
+  exhaustGlows.push(glow);
+  const rearLip = box(
+    0.47,
+    0.095,
+    0.72,
+    pearl,
+    [side * 0.69, 1.06, 1.95],
+    body,
+  );
+  rearLip.rotation.y = side * 0.22;
 }
 for (const z of [-0.7, 1.14]) {
-  const cushion = sphere(0.65, seat, [0, 1.28, z], body);
-  cushion.scale.set(1.1, 0.28, 0.74);
-  const backrest = sphere(0.66, seat, [0, 1.58, z + 0.45], body);
-  backrest.scale.set(1.05, 0.71, 0.29);
-  const pad = sphere(0.54, red, [0, 1.62, z + 0.29], body);
-  pad.scale.set(1.03, 0.66, 0.2);
+  mesh(
+    loft(
+      [
+        [0, 1.24, z - 0.73, 0.012, 0.012],
+        [0, 1.27, z - 0.46, 0.56, 0.095],
+        [0, 1.29, z - 0.05, 0.65, 0.13],
+        [0, 1.48, z + 0.36, 0.64, 0.3],
+        [0, 1.67, z + 0.55, 0.63, 0.33],
+        [0, 1.64, z + 0.73, 0.024, 0.031],
+      ],
+      0.57,
+    ),
+    seat,
+    [0, 0, 0],
+    body,
+  );
+  const pad = sphere(0.52, milled, [0, 1.64, z + 0.307], body);
+  pad.scale.set(1.05, 0.61, 0.23);
+  for (const side of [-1, 1]) {
+    const bolster = sphere(0.34, seat, [side * 0.43, 1.47, z + 0.08], body);
+    bolster.scale.set(0.48, 0.62, 1.55);
+  }
 }
 const numberMap = paintTexture(128, (ctx) => {
   ctx.fillStyle = "#fff1b0";
@@ -684,7 +982,7 @@ const numberMap = paintTexture(128, (ctx) => {
 const badge = mesh(
   new THREE.CircleGeometry(0.31, 32),
   new THREE.MeshBasicMaterial({ map: numberMap }),
-  [0, 1.353, -1.45],
+  [0, 1.49, -1.28],
   body,
 );
 badge.rotation.x = -Math.PI / 2;
@@ -697,13 +995,49 @@ for (let x of [-1.42, 1.42])
     let axle = new THREE.Group();
     pivot.add(axle);
     axle.scale.set(1.23, 1.1, 1.32);
-    let wheel = mesh(
-      new THREE.CylinderGeometry(0.505, 0.505, 0.39, 36),
-      dark,
+    const profile = [
+      [0, -0.205],
+      [0.38, -0.205],
+      [0.45, -0.205],
+      [0.509, -0.167],
+      [0.538, -0.1],
+      [0.521, -0.075],
+      [0.538, -0.051],
+      [0.543, -0.008],
+      [0.525, 0.016],
+      [0.543, 0.04],
+      [0.534, 0.096],
+      [0.517, 0.12],
+      [0.526, 0.144],
+      [0.49, 0.185],
+      [0.449, 0.206],
+      [0, 0.206],
+    ].map(([radius, y]) => new THREE.Vector2(radius, y));
+    const wheel = mesh(
+      new THREE.LatheGeometry(profile, 48),
+      tireMaterial,
       [0, 0, 0],
       axle,
     );
     wheel.rotation.z = Math.PI / 2;
+    const lug = new THREE.InstancedMesh(
+      new THREE.BoxGeometry(0.19, 0.015, 0.071),
+      tireMaterial,
+      34,
+    );
+    const treadTransform = new THREE.Object3D();
+    for (let i = 0; i < 34; i++) {
+      const angle = (i * Math.PI * 2) / 34;
+      treadTransform.position.set(
+        i % 2 ? 0.106 : -0.106,
+        Math.cos(angle) * 0.531,
+        Math.sin(angle) * 0.531,
+      );
+      treadTransform.rotation.set(angle, 0, (i % 2 ? 1 : -1) * 0.24);
+      treadTransform.updateMatrix();
+      lug.setMatrixAt(i, treadTransform.matrix);
+    }
+    axle.add(lug);
     let hub = cyl(0.3, 0.3, 0.38, white, [0, 0, 0], axle);
     hub.rotation.z = Math.PI / 2;
     const rim = mesh(
@@ -713,15 +1047,33 @@ for (let x of [-1.42, 1.42])
       axle,
     );
     rim.rotation.y = Math.PI / 2;
-    for (const offset of [-0.14, 0, 0.14]) {
-      const tread = mesh(
-        new THREE.TorusGeometry(0.501, 0.048, 10, 36),
-        dark,
-        [offset, 0, 0],
-        axle,
-      );
-      tread.rotation.y = Math.PI / 2;
-    }
+    const shockCurve = new THREE.CatmullRomCurve3(
+      Array.from({ length: 65 }, (_, i) => {
+        const t = i / 64,
+          angle = t * 12 * Math.PI;
+        return new THREE.Vector3(
+          Math.cos(angle) * 0.079,
+          t * 0.43,
+          Math.sin(angle) * 0.079,
+        );
+      }),
+    );
+    const spring = mesh(
+      new THREE.TubeGeometry(shockCurve, 64, 0.02, 6, false),
+      chrome,
+      [x * 0.76, 0.57, z + 0.22],
+      body,
+    );
+    spring.rotation.z = Math.sign(x) * 0.22;
+    const shaft = cyl(
+      0.052,
+      0.059,
+      0.54,
+      bumper,
+      [x * 0.76, 0.8, z + 0.22],
+      body,
+    );
+    shaft.rotation.z = spring.rotation.z;
     for (let i = 0; i < 6; i++) {
       const angle = (i * Math.PI) / 3;
       sphere(
@@ -731,7 +1083,7 @@ for (let x of [-1.42, 1.42])
         axle,
       );
     }
-    wheels.push({ pivot, axle, front: z < 0, side: Math.sign(x) });
+    wheels.push({ pivot, axle, spring, front: z < 0, side: Math.sign(x) });
   }
 let steering = new THREE.Group();
 steering.position.set(0, 2.05, -1.15);
@@ -744,38 +1096,68 @@ box(0.83, 0.11, 0.065, chrome, [0, 0, 0], wheelFace);
 box(0.11, 0.45, 0.065, chrome, [0, -0.23, 0], wheelFace);
 sphere(0.13, yellow, [0, 0, 0.05], wheelFace);
 steering.position.set(0, 2.26, -1.66);
-const caramel = mat(0xc98b48),
-  cream = mat(0xffdfaa),
-  black = mat(0x222635, 0.68),
-  pink = mat(0xe8899a),
-  eyes = mat(0xffe96a),
-  pupil = mat(0x10151d);
+const pink = mat(0xd88a89, 0.54);
+const eyes = mat(0xffd757, 0.43);
+const pupil = mat(0x11131a, 0.33);
+const noseMaterial = new THREE.MeshPhysicalMaterial({
+  color: 0x262027,
+  roughness: 0.43,
+  clearcoat: 0.42,
+});
+const dogCoat = coatPalette(false);
+const catCoat = coatPalette(true);
+const pawGeometry = pawSculpt();
+const hindPawGeometry = pawSculpt(1.34);
+
+function furTufts(parent, material, side, origin, count, sweep) {
+  for (let i = 0; i < count; i++) {
+    const scale = 1 - i * 0.14;
+    const strand = mesh(
+      loft([
+        [0, 0.12, 0, 0.048, 0.043],
+        [side * 0.025, 0.045, 0.016, 0.059, 0.042],
+        [side * 0.067, -0.04, 0.032, 0.034, 0.028],
+        [side * 0.102, -0.153, 0.062, 0.002, 0.003],
+      ]),
+      material,
+      [
+        origin[0] + side * i * 0.026,
+        origin[1] - i * 0.055,
+        origin[2] + i * 0.019,
+      ],
+      parent,
+    );
+    strand.rotation.z = side * sweep;
+    strand.scale.setScalar(scale);
+  }
+}
+
 function mascot(cat) {
-  let root = new THREE.Group(),
-    m = cat ? black : caramel;
-  mesh(
+  const root = new THREE.Group();
+  const palette = cat ? catCoat : dogCoat;
+  const m = palette.base;
+  const torso = mesh(bodySculpt(cat), m, [0, 0, 0], root);
+  const chest = mesh(
     loft(
       [
-        [0, 0.12, 0.035, 0.013, 0.013],
-        [0, 0.33, 0.012, 0.43, 0.32],
-        [0, 0.65, -0.018, 0.44, 0.35],
-        [0, 0.92, -0.061, 0.34, 0.28],
-        [0, 1.12, -0.067, 0.205, 0.21],
-        [0, 1.24, -0.04, 0.02, 0.025],
+        [0, 0.23, -0.26, 0.012, 0.018],
+        [0, 0.42, -0.32, 0.215, 0.06],
+        [0, 0.67, -0.343, 0.263, 0.086],
+        [0, 0.92, -0.302, 0.204, 0.071],
+        [0, 1.03, -0.229, 0.015, 0.014],
       ],
-      0.85,
+      0.89,
     ),
-    m,
+    palette.light,
     [0, 0, 0],
     root,
   );
-  let belly = sphere(0.37, cat ? mat(0x383942) : cream, [0, 0.5, -0.34], root);
-  belly.scale.set(0.85, 1, 0.35);
-  let head = new THREE.Group();
-  head.position.y = 1.55;
+  for (const side of [-1, 1])
+    furTufts(root, palette.light, side, [side * 0.13, 0.65, -0.39], 3, -0.24);
+  const head = new THREE.Group();
+  head.position.set(0, 1.53, cat ? -0.06 : -0.01);
   root.add(head);
-  let face = sphere(0.65, m, [0, 0, 0], head);
-  face.scale.set(1, 0.9, 0.86);
+  mesh(headSculpt(cat), m, [0, 0, 0], head);
   const ears = [];
   const eyeGroups = [];
   for (const side of [-1, 1]) {
@@ -797,48 +1179,67 @@ function mascot(cat) {
           [0, -0.29, 0.29, 0.198, 0.091],
           [0, -0.45, 0.29, 0.015, 0.015],
         ];
-    mesh(loft(profile, 0.84), cat ? black : mat(0x9a5830), [0, 0, 0], ear);
-    const inner = sphere(
-      0.24,
-      cat ? pink : mat(0xb8784d),
-      [0, cat ? 0.32 : -0.15, cat ? -0.103 : 0.195],
+    const earMesh = mesh(
+      bendableLoft(profile, 0.76, [side * 0.078, -0.095, 0.185]),
+      cat ? palette.base : palette.shade,
+      [0, 0, 0],
       ear,
     );
-    inner.scale.set(cat ? 0.49 : 0.58, cat ? 1.05 : 1.16, 0.22);
-    ears.push(ear);
-
+    const innerProfile = profile.map(([x, y, z, w, h]) => [
+      x,
+      y * 0.78,
+      z * 0.86,
+      w * 0.65,
+      h * 0.43,
+    ]);
+    const lining = mesh(
+      bendableLoft(innerProfile, 0.88, [side * 0.078, -0.095, 0.185]),
+      palette.inner,
+      [0, cat ? 0.065 : -0.026, cat ? -0.101 : 0.159],
+      ear,
+    );
+    ears.push({ root: ear, meshes: [earMesh, lining] });
+    for (const position of cat
+      ? [
+          [side * 0.49, -0.14, -0.29],
+          [side * 0.51, -0.257, -0.24],
+        ]
+      : [[side * 0.42, 0.18, -0.28]]) {
+      furTufts(head, palette.base, side, position, cat ? 3 : 2, side * 0.66);
+    }
     const eye = new THREE.Group();
-    eye.position.set(side * 0.265, 0.12, -0.47);
+    eye.position.set(
+      side * (cat ? 0.272 : 0.259),
+      cat ? 0.135 : 0.162,
+      cat ? -0.405 : -0.475,
+    );
     eye.rotation.y = -side * 0.32;
     head.add(eye);
     const socket = sphere(
       0.2,
-      cat ? mat(0x353b50) : mat(0xad6632),
+      cat ? palette.shade : palette.shade,
       [0, 0, 0.009],
       eye,
     );
     socket.scale.set(0.89, 1.15, 0.6);
     const sclera = sphere(0.177, cat ? eyes : white, [0, 0, -0.07], eye);
     sclera.scale.set(0.8, 1.08, 0.49);
+    const gaze = new THREE.Group();
+    eye.add(gaze);
     const iris = sphere(
       0.118,
       cat ? mat(0xe6a82e) : mat(0x6e442a),
       [-side * 0.024, -0.015, -0.133],
-      eye,
+      gaze,
     );
     iris.scale.set(0.78, 1, 0.43);
-    const slit = sphere(0.087, pupil, [-side * 0.024, -0.012, -0.171], eye);
+    const slit = sphere(0.087, pupil, [-side * 0.024, -0.012, -0.171], gaze);
     slit.scale.set(cat ? 0.39 : 0.85, 1.05, 0.35);
-    sphere(0.024, white, [-side * 0.024 - 0.027, 0.021, -0.196], eye);
-    const brow = sphere(
-      0.114,
-      cat ? black : mat(0x7e492b),
-      [side * 0.01, 0.22, -0.037],
-      eye,
-    );
+    sphere(0.024, white, [-side * 0.024 - 0.027, 0.021, -0.196], gaze);
+    const brow = sphere(0.114, palette.shade, [side * 0.01, 0.22, -0.037], eye);
     brow.scale.set(1.22, 0.24, 0.43);
     brow.rotation.z = side * 0.14;
-    eyeGroups.push({ eye, brow, slit, side });
+    eyeGroups.push({ eye, brow, slit, gaze, side });
 
     if (cat) {
       for (let i = 0; i < 3; i++) {
@@ -862,38 +1263,87 @@ function mascot(cat) {
       }
     }
   }
-  let muzzle = sphere(
-    0.32,
-    cat ? mat(0x292b35) : cream,
-    [0, -0.21, -0.52],
+  mesh(muzzleSculpt(cat), palette.light, [0, 0, 0], head);
+  const muzzleEnd = cat ? -0.66 : -0.895;
+  const nose = mesh(
+    loft(
+      [
+        [0, -0.179, muzzleEnd - 0.058, 0.015, 0.01],
+        [0, -0.141, muzzleEnd - 0.036, cat ? 0.098 : 0.143, 0.078],
+        [0, -0.147, muzzleEnd + 0.045, cat ? 0.123 : 0.164, 0.082],
+        [0, -0.159, muzzleEnd + 0.101, 0.023, 0.015],
+      ],
+      0.64,
+    ),
+    cat ? pink : noseMaterial,
+    [0, 0, 0],
     head,
   );
-  muzzle.scale.set(1.2, 0.65, 0.6);
-  sphere(0.115, cat ? pink : dark, [0, -0.15, -0.74], head);
-  if (!cat) {
-    const blaze = sphere(0.24, mat(0xe9ae67), [0.035, 0.016, -0.53], head);
-    blaze.scale.set(0.55, 1.05, 0.25);
-    for (const side of [-1, 1]) {
-      for (let i = 0; i < 3; i++) {
-        sphere(
-          0.018,
-          caramel,
-          [side * (0.22 + i * 0.053), -0.17 - i * 0.039, -0.688 + i * 0.028],
-          head,
-        );
-      }
+  for (const side of [-1, 1]) {
+    const nostril = sphere(
+      0.041,
+      pupil,
+      [side * (cat ? 0.042 : 0.072), -0.163, muzzleEnd - 0.026],
+      head,
+    );
+    nostril.scale.set(1, 0.61, 0.42);
+    for (let i = 0; i < 3; i++) {
+      sphere(
+        0.014,
+        palette.shade,
+        [
+          side * (0.141 + i * 0.046),
+          -0.204 - i * 0.037,
+          muzzleEnd + 0.032 + i * 0.021,
+        ],
+        head,
+      );
     }
   }
-  let smile = mesh(
-    new THREE.TorusGeometry(0.18, 0.025, 6, 16, Math.PI),
-    dark,
-    [0, -0.34, -0.67],
-    head,
+  const jaw = new THREE.Group();
+  jaw.position.set(0, -0.269, cat ? -0.35 : -0.484);
+  head.add(jaw);
+  const lower = mesh(
+    loft(
+      [
+        [0, -0.06, -0.395, 0.02, 0.02],
+        [0, -0.083, -0.305, 0.185, 0.074],
+        [0, -0.079, -0.176, 0.257, 0.112],
+        [0, -0.041, -0.034, 0.217, 0.085],
+        [0, -0.016, 0.124, 0.066, 0.03],
+      ],
+      0.85,
+    ),
+    palette.light,
+    [0, 0, 0],
+    jaw,
   );
-  smile.rotation.z = Math.PI;
-  const openMouth = sphere(0.145, pupil, [0, -0.35, -0.697], head);
-  openMouth.scale.set(0.94, 1, 0.31);
-  openMouth.visible = false;
+  lower.scale.z = cat ? 0.76 : 1;
+  const openMouth = sphere(
+    0.193,
+    pupil,
+    [0, -0.015, cat ? -0.231 : -0.294],
+    jaw,
+  );
+  openMouth.scale.set(1, 0.23, 0.56);
+  const tongue = sphere(0.108, pink, [0, -0.02, cat ? -0.28 : -0.36], jaw);
+  tongue.scale.set(1, 0.32, 0.75);
+  const smile = new THREE.Group();
+  head.add(smile);
+  for (const side of [-1, 1]) {
+    const path = new THREE.CubicBezierCurve3(
+      new THREE.Vector3(0, -0.294, muzzleEnd + 0.018),
+      new THREE.Vector3(side * 0.085, -0.357, muzzleEnd + 0.024),
+      new THREE.Vector3(side * 0.209, -0.36, muzzleEnd + 0.098),
+      new THREE.Vector3(side * 0.245, -0.279, muzzleEnd + 0.14),
+    );
+    mesh(
+      new THREE.TubeGeometry(path, 12, 0.017, 6, false),
+      pupil,
+      [0, 0, 0],
+      smile,
+    );
+  }
   const collar = mesh(
     new THREE.TorusGeometry(0.376, 0.06, 10, 32),
     cat ? blue : red,
@@ -910,28 +1360,18 @@ function mascot(cat) {
     const lower = sphere(1, m, [0, 0, 0], root);
     const paw = new THREE.Group();
     root.add(paw);
-    const pad = sphere(0.185, m, [0, 0, 0], paw);
-    pad.scale.set(0.91, 0.74, 1);
-    for (let digit = -1; digit <= 1; digit++) {
-      const toe = sphere(
-        0.072,
-        cat ? mat(0x32374a) : caramel,
-        [digit * 0.083, 0, -0.124],
-        paw,
-      );
-      toe.scale.set(0.88, 0.92, 1.14);
-    }
+    mesh(pawGeometry, m, [0, 0, 0], paw);
     arms.push({ shoulder, upper, lower, paw, side });
   }
   for (let side of [-1, 1]) {
-    let foot = sphere(0.26, m, [side * 0.31, 0.1, -0.22], root);
-    foot.scale.set(0.9, 0.6, 1.3);
+    const foot = mesh(hindPawGeometry, m, [side * 0.3, 0.135, -0.23], root);
+    foot.rotation.y = side * 0.11;
   }
   let tail = new THREE.Group();
   tail.position.set(0, 0.6, 0.35);
   root.add(tail);
-  mesh(
-    loft(
+  const tailMesh = mesh(
+    bendableLoft(
       cat
         ? [
             [0, 0, 0, 0.126, 0.11],
@@ -947,6 +1387,8 @@ function mascot(cat) {
             [0, 0.36, 0.44, 0.09, 0.085],
             [0, 0.59, 0.48, 0.019, 0.019],
           ],
+      0.82,
+      [0.23, -0.19, 0.14],
     ),
     m,
     [0, 0, 0],
@@ -962,6 +1404,11 @@ function mascot(cat) {
     eyeGroups,
     smile,
     openMouth,
+    jaw,
+    tongue,
+    tailMesh,
+    chest,
+    torso,
     item: null,
   };
 }
@@ -994,8 +1441,9 @@ function positionCrew() {
   }
 }
 positionCrew();
-const rampPoint = sample(0.68);
-const rampDirection = tangent(0.68);
+const rampProgress = 0.8;
+const rampPoint = sample(rampProgress);
+const rampDirection = tangent(rampProgress);
 const rampPaint = mat(0x82e9fc, 0.43);
 rampPaint.map = paintTexture(256, (ctx, size) => {
   ctx.fillStyle = "#174770";
@@ -1095,11 +1543,58 @@ let keys = {},
   toastTime = 0;
 heading = Math.atan2(tangent(0.015).x, tangent(0.015).z);
 const itemTypes = ["banana", "turbo"];
+const cruiseSpeed = 27;
 const tiers = [
-  { minimum: 0.43, duration: 0.72, speed: 30, label: "Mini-turbo azul" },
-  { minimum: 0.94, duration: 1.2, speed: 33, label: "Mini-turbo laranja" },
-  { minimum: 1.49, duration: 1.8, speed: 36, label: "Mini-turbo roxo" },
+  {
+    minimum: 0.39,
+    duration: 0.8,
+    power: 0.15,
+    label: "Mini-turbo amarelo",
+    color: 0xffd746,
+    note: 392,
+  },
+  {
+    minimum: 0.85,
+    duration: 1.5,
+    power: 0.25,
+    label: "Mini-turbo azul",
+    color: 0x42baff,
+    note: 523.25,
+  },
+  {
+    minimum: 1.34,
+    duration: 2.5,
+    power: 0.4,
+    label: "Mini-turbo vermelho",
+    color: 0xff454c,
+    note: 659.25,
+  },
 ];
+let audio;
+function unlockAudio() {
+  if (!$("sounds").checked || !window.AudioContext) return;
+  audio ??= new AudioContext();
+  if (audio.state === "suspended") audio.resume().catch(() => {});
+}
+function driftCue(tier, released = false) {
+  if (!audio || audio.state !== "running" || !$("sounds").checked) return;
+  const tone = audio.createOscillator();
+  const gain = audio.createGain();
+  const at = audio.currentTime;
+  const note = tiers[tier - 1].note;
+  tone.type = released ? "triangle" : "sine";
+  tone.frequency.setValueAtTime(note, at);
+  tone.frequency.exponentialRampToValueAtTime(
+    note * (released ? 1.58 : 1.13),
+    at + 0.13,
+  );
+  gain.gain.setValueAtTime(0.001, at);
+  gain.gain.exponentialRampToValueAtTime(0.075, at + 0.025);
+  gain.gain.exponentialRampToValueAtTime(0.001, at + 0.18);
+  tone.connect(gain).connect(audio.destination);
+  tone.start(at);
+  tone.stop(at + 0.19);
+}
 let driftSide = 0;
 let neutralTime = 0;
 let swapCooldown = 0;
@@ -1115,7 +1610,7 @@ function clearBoosts() {
 function cancelDrift() {
   drift = driftSide = neutralTime = 0;
 }
-function updateDrift(dt, turn, brake, offroad) {
+function updateDrift(dt, turn, brake, offroad, progress) {
   if (velocity < 8.5 || brake || offroad || stun > 0 || y > 0.12) {
     cancelDrift();
     return;
@@ -1125,7 +1620,8 @@ function updateDrift(dt, turn, brake, offroad) {
     if (tier > 0) {
       activeTier = tier;
       driftBoost = tiers[tier - 1].duration;
-      velocity = Math.max(velocity + 3 + tier * 2, 22 + tier * 2);
+      velocity += cruiseSpeed * tiers[tier - 1].power;
+      driftCue(tier, true);
       notify(tiers[tier - 1].label + "!");
     }
     cancelDrift();
@@ -1137,7 +1633,23 @@ function updateDrift(dt, turn, brake, offroad) {
   if (neutralTime > 0.27) {
     cancelDrift();
   } else if (turn) {
-    drift = Math.min(1.75, drift + dt * (turn === driftSide ? 1 : 0.68));
+    const before = tangent(progress - 0.009);
+    const after = tangent(progress + 0.009);
+    const curvature = before.x * after.z - before.z * after.x;
+    if (curvature * driftSide < 0.042) return;
+    const stage = chargedTier();
+    const intensity = THREE.MathUtils.clamp(
+      Math.abs(curvature) * 4.4,
+      0.58,
+      1.16,
+    );
+    const pace = THREE.MathUtils.clamp(velocity / 17, 0.52, 1.17);
+    drift = Math.min(
+      1.6,
+      drift + dt * intensity * pace * (turn === driftSide ? 1 : 0.7),
+    );
+    const next = chargedTier();
+    if (next > stage) driftCue(next);
   }
 }
 const motion = new THREE.Vector3();
@@ -1316,7 +1828,7 @@ function setPaused(value) {
       ? "Corrida concluída em " + $("time").textContent
       : running
         ? "Corrida pausada"
-        : "Curvas do Bosque · 3 voltas";
+        : "Volta do Ribeirão · 3 voltas";
 }
 function recover() {
   if (!running || paused) return;
@@ -1373,12 +1885,14 @@ function held(code) {
   return keys[code] || [...touchKeys.values()].includes(code);
 }
 $("play").onclick = () => {
+  unlockAudio();
   if (lap > 3) reset();
   running = true;
   setPaused(false);
   $("play").blur();
 };
 $("reset").onclick = () => {
+  unlockAudio();
   reset();
   running = true;
   setPaused(false);
@@ -1388,8 +1902,8 @@ $("shadows").onchange = (e) => (renderer.shadowMap.enabled = e.target.checked);
 const dirtMaterial = mat(0xccb18c);
 const smokeMaterial = mat(0xb4c9d1);
 const impactMaterial = new THREE.MeshBasicMaterial({ color: 0xffe5a0 });
-const sparkMaterials = [0x53cbff, 0xff9638, 0xc684ff].map(
-  (color) => new THREE.MeshBasicMaterial({ color }),
+const sparkMaterials = tiers.map(
+  ({ color }) => new THREE.MeshBasicMaterial({ color }),
 );
 const flameMaterial = new THREE.MeshBasicMaterial({ color: 0x63faff });
 const dust = Array.from({ length: 32 }, () => {
@@ -1415,7 +1929,7 @@ function updateDust(dt, active) {
     const particle = dust[dustIndex];
     const { puff } = particle;
     const tier = chargedTier();
-    const spark = impactTime > 0.19 || (tier > 0 && dustIndex % 3 !== 0);
+    const spark = impactTime > 0.19 || (tier > 0 && dustIndex % 4 !== 0);
     puff.material = boosting()
       ? itemBoost > 0
         ? flameMaterial
@@ -1476,6 +1990,62 @@ function poseLimb(limb, from, to, width) {
   limb.scale.set(width, armAxis.length() * 0.68, width);
   limb.quaternion.setFromUnitVectors(up, armAxis.normalize());
 }
+const streakGeo = new THREE.BufferGeometry();
+const streakPoints = new Float32Array(16 * 6);
+const streakAlpha = new Float32Array(16 * 2);
+streakGeo.setAttribute("position", new THREE.BufferAttribute(streakPoints, 3));
+streakGeo.setAttribute("fade", new THREE.BufferAttribute(streakAlpha, 1));
+const streaks = new THREE.LineSegments(
+  streakGeo,
+  new THREE.ShaderMaterial({
+    transparent: true,
+    depthWrite: false,
+    depthTest: false,
+    blending: THREE.AdditiveBlending,
+    vertexShader:
+      "attribute float fade;varying float alpha; void main(){alpha=fade;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}",
+    fragmentShader:
+      "varying float alpha; void main(){gl_FragColor=vec4(.65,.92,1.,alpha);}",
+  }),
+);
+streaks.frustumCulled = false;
+streaks.renderOrder = 20;
+camera.add(streaks);
+scene.add(camera);
+let streakStrength = 0;
+function updateStreaks(intensity, dt, now) {
+  streakStrength = THREE.MathUtils.lerp(
+    streakStrength,
+    intensity,
+    1 - Math.exp(-8 * dt),
+  );
+  streaks.visible = streakStrength > 0.015;
+  if (!streaks.visible) return;
+  const edge = Math.tan(THREE.MathUtils.degToRad(camera.fov * 0.5));
+  for (let i = 0; i < 16; i++) {
+    const phase = (now * 2.6 + i * 0.618) % 1;
+    const angle = i * 2.39996;
+    const x = Math.cos(angle) * edge * camera.aspect,
+      y = Math.sin(angle) * edge;
+    const radius = 0.53 + phase * 0.75;
+    const long = 0.06 + streakStrength * 0.23;
+    streakPoints.set(
+      [
+        x * (radius - long),
+        y * (radius - long),
+        -1,
+        x * radius,
+        y * radius,
+        -1,
+      ],
+      i * 6,
+    );
+    streakAlpha[i * 2] = 0;
+    streakAlpha[i * 2 + 1] = Math.sin(phase * Math.PI) * streakStrength * 0.63;
+  }
+  streakGeo.attributes.position.needsUpdate = true;
+  streakGeo.attributes.fade.needsUpdate = true;
+}
 let previousFrame = performance.now();
 function tick() {
   requestAnimationFrame(tick);
@@ -1484,6 +2054,7 @@ function tick() {
     dt = Math.min(frameSeconds, 0.05),
     now = frame / 1000;
   previousFrame = frame;
+  river.material.uniforms.time.value = now;
   let dustActive = false;
   if (running && !paused) {
     elapsed += frameSeconds;
@@ -1494,21 +2065,24 @@ function tick() {
       turn = Number(right) - Number(left);
     const near = closest(position);
     const offroad = near.dist > width / 2;
-    updateDrift(dt, turn, brake, offroad);
+    updateDrift(dt, turn, brake, offroad, near.t);
     const drifting = driftSide !== 0;
     dustActive = (drifting || offroad) && velocity > 6;
     itemBoost = Math.max(0, itemBoost - dt);
     driftBoost = Math.max(0, driftBoost - dt);
     const boostSpeed = Math.max(
       itemBoost > 0 ? 38 : 0,
-      driftBoost > 0 ? tiers[activeTier - 1].speed : 0,
+      driftBoost > 0 ? cruiseSpeed * (1 + tiers[activeTier - 1].power) : 0,
     );
     if (stun > 0) {
       stun -= dt;
       velocity *= Math.max(0, 1 - 3 * dt);
     } else {
       const friction = 10 * dt;
-      const max = offroad ? 13 : Math.max(boostSpeed, drifting ? 21 : 27);
+      const groundLimit = surfaceAt(position) === 2 ? 23 : cruiseSpeed;
+      const max = offroad
+        ? 13
+        : Math.max(boostSpeed, drifting ? 21 : groundLimit);
       velocity += accel
         ? 22 * dt
         : brake
@@ -1673,6 +2247,11 @@ function tick() {
       body.rotation.z * w.side * 0.43 -
       Math.min(y, 0.6) * 0.09 +
       (w.front ? vy * 0.007 : -vy * 0.005);
+    w.spring.scale.y = THREE.MathUtils.clamp(
+      1 - (suspension - 0.605) * 1.6,
+      0.69,
+      1.24,
+    );
     w.pivot.position.y = THREE.MathUtils.lerp(
       w.pivot.position.y,
       suspension,
@@ -1697,19 +2276,67 @@ function tick() {
     m.tail.rotation.y = Math.sin(now * (m.cat ? 5.9 : 9)) * 0.36 - turn * 0.21;
     m.tail.rotation.x = Math.sin(now * 5.5) * 0.12 + vy * 0.029;
     const startled = impactTime > 0.12 || slipTime > 0.25 || vy > 2.75;
-    m.smile.visible = !startled;
-    m.openMouth.visible = startled;
-    for (const [i, { eye, brow, slit, side }] of m.eyeGroups.entries()) {
+    const tier = chargedTier();
+    const delighted = boosting() && !isPilot;
+    const open = startled
+      ? 0.64
+      : delighted
+        ? 0.42 + Math.sin(now * 12) * 0.09
+        : swap > 0
+          ? 0.22
+          : tier * 0.035;
+    m.jaw.rotation.x = THREE.MathUtils.lerp(
+      m.jaw.rotation.x,
+      -open,
+      1 - Math.exp(-17 * dt),
+    );
+    m.smile.visible = m.jaw.rotation.x > -0.33;
+    m.openMouth.visible = m.jaw.rotation.x < -0.14;
+    m.tongue.visible = delighted || startled;
+    m.tailMesh.morphTargetInfluences[0] =
+      0.45 + Math.sin(now * 6.7) * 0.27 + Math.abs(slide) * 0.43;
+    m.tail.rotation.y += slide * 0.33;
+    m.head.rotation.y +=
+      Math.sin(now * 2.3) * 0.05 + (m.cat ? -0.15 : 0.17) * jump;
+    m.chest.scale.y = 1 + Math.sin(now * 4.4) * 0.022;
+    for (const [i, { eye, brow, slit, gaze, side }] of m.eyeGroups.entries()) {
       const blink =
         Math.max(0, Math.cos(now * 1.74 + 1.1 + Number(m.cat)) - 0.985) / 0.015;
-      eye.scale.y = startled ? 1.14 : boosting() ? 0.88 : 1 - blink * 0.92;
+      eye.scale.y =
+        (startled ? 1.14 : boosting() || tier ? 0.92 - tier * 0.065 : 1) *
+        (1 - blink * 0.91);
+      gaze.position.x = THREE.MathUtils.lerp(
+        gaze.position.x,
+        turn * 0.044 + Math.sin(now * 3.1) * 0.014 + jump * side * 0.02,
+        0.19,
+      );
+      gaze.position.y = startled ? 0.018 : vy * 0.004;
       brow.rotation.z =
-        side * (startled ? -0.27 : boosting() ? 0.34 : swap > 0 ? 0.22 : 0.13);
-      slit.scale.y = startled ? 0.82 : 1.05;
-      m.ears[i].rotation.x =
-        Math.sin(now * 7.5 + i) * (m.cat ? 0.08 : 0.19) +
+        side *
+        (startled
+          ? -0.32
+          : tier
+            ? 0.18 + tier * 0.12
+            : boosting()
+              ? 0.3
+              : 0.13);
+      brow.position.y = startled ? 0.255 : 0.223 - tier * 0.012;
+      slit.scale.y = startled ? 0.77 : 1.05;
+      const ear = m.ears[i];
+      ear.root.rotation.x =
+        Math.sin(now * 8.3 + i) * (0.085 + Math.abs(velocity) * 0.0032) +
         vy * 0.037 +
-        impactTime * 0.59;
+        impactTime * 0.59 -
+        Math.abs(velocity) * 0.012;
+      for (const piece of ear.meshes)
+        piece.morphTargetInfluences[0] = THREE.MathUtils.clamp(
+          0.19 +
+            Math.abs(velocity) * 0.015 +
+            Math.sin(now * 8 + i) * 0.24 +
+            impactTime * 0.48,
+          0,
+          1,
+        );
     }
     for (const { shoulder, upper, lower, paw, side } of m.arms) {
       if (isPilot && swap === 0) {
@@ -1717,7 +2344,11 @@ function tick() {
         wheelFace.localToWorld(handGoal);
         m.root.worldToLocal(handGoal);
       } else {
-        handGoal.set(side * (0.53 + jump * 0.35), 0.59 + jump * 0.61, -0.4);
+        handGoal.set(
+          side * (0.53 + jump * 0.35 + Math.abs(slide) * 0.34),
+          0.59 + jump * 0.61 - Math.abs(slide) * 0.28 + impactTime * 0.3,
+          -0.4 + Math.abs(slide) * 0.76,
+        );
         handGoal.x += side * throwing * 0.34;
         handGoal.y += throwing * 0.54;
         handGoal.z += throwing * 0.66;
@@ -1748,6 +2379,24 @@ function tick() {
     .addScaledVector(forward, 4);
   camera.lookAt(camTarget);
   camera.fov = THREE.MathUtils.lerp(camera.fov, boosting() ? 76 : 68, 0.06);
+  const visualBoost = boosting() && !paused && $("particles").checked;
+  const intensity = visualBoost
+    ? itemBoost > 0
+      ? 0.42
+      : tiers[activeTier - 1].power
+    : 0;
+  updateStreaks(intensity, dt, now);
+  const glowColor =
+    itemBoost > 0 ? 0x54d7ff : tiers[Math.max(0, activeTier - 1)].color;
+  for (const glow of exhaustGlows) {
+    glow.material.color.setHex(glowColor);
+    glow.material.opacity = THREE.MathUtils.lerp(
+      glow.material.opacity,
+      boosting() ? 0.85 : 0,
+      1 - Math.exp(-15 * dt),
+    );
+    glow.scale.setScalar(1 + 0.17 * Math.sin(now * 46));
+  }
   camera.updateProjectionMatrix();
   renderer.render(scene, camera);
 }

@@ -43,6 +43,7 @@ export function loft(sections, exponent = 1) {
   const sides = 32;
   const vertices = [];
   const indices = [];
+  const uv = [];
   const center = new THREE.Vector3();
   const tangent = new THREE.Vector3();
   const size = new THREE.Vector3();
@@ -68,6 +69,7 @@ export function loft(sections, exponent = 1) {
           Math.max(0.001, size.y) * power(Math.sin(angle)),
         );
       vertices.push(v.x, v.y, v.z);
+      uv.push(j / sides, t);
       if (i > 0) {
         const a = (i - 1) * sides + j;
         const b = (i - 1) * sides + ((j + 1) % sides);
@@ -80,6 +82,7 @@ export function loft(sections, exponent = 1) {
     "position",
     new THREE.Float32BufferAttribute(vertices, 3),
   );
+  geometry.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2));
   geometry.setIndex(indices);
   geometry.computeVertexNormals();
   return geometry;

@@ -129,13 +129,13 @@ canvas {
   accent-color: #96a9c4;
 }
 .drift-row label[data-tier="1"] progress {
-  accent-color: #53cbff;
+  accent-color: #ffd746;
 }
 .drift-row label[data-tier="2"] progress {
-  accent-color: #ff9638;
+  accent-color: #42baff;
 }
 .drift-row label[data-tier="3"] progress {
-  accent-color: #c684ff;
+  accent-color: #ff454c;
 }
 #boost {
   font-size: 11px;
