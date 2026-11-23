@@ -1,6 +1,6 @@
 # Autoria dos modelos 3D
 
-O jogo utiliza quatro GLBs versionados em `public/models`. O estúdio de autoria permite editar e regenerar esses arquivos com Three.js. O Blender também pode abrir os modelos para inspeção e edição.
+O jogo utiliza quatro GLBs versionados em `public/models`. Os personagens ficam em `public/models/characters`. O estúdio de autoria permite editar e regenerar esses arquivos com Three.js. O Blender também pode abrir os modelos para inspeção e edição.
 
 1. Rode `npm run dev` e abra `/tools/studio.html` no endereço exibido pelo Vite.
 2. Clique em **Exportar modelos** e salve os quatro GLBs em uma pasta separada.
