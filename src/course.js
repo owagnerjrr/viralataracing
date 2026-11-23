@@ -148,8 +148,15 @@ export function createRiver() {
         float crossWave = sin(point.x*2.3-point.z*.84+time*.67);
         float shimmer = pow(max(0.,wave*crossWave), 9.);
         float edge=smoothstep(.25,.48,abs(coords.x-.5));
-        vec3 color=mix(vec3(.027,.27,.34),vec3(.07,.49,.46),edge*.67+.12*wave);
-        color+=vec3(.23,.38,.39)*shimmer+edge*vec3(.045,.09,.08);
+        vec3 normal = normalize(vec3(wave*.078,1.,crossWave*.106));
+        vec3 viewRay = normalize(cameraPosition-point);
+        vec3 reflection = reflect(-viewRay,normal);
+        float fresnel = pow(1.-max(0.,dot(normal,viewRay)),3.);
+        vec3 reflectedSky = mix(vec3(.50,.67,.67),vec3(.13,.35,.66),
+          smoothstep(0.,.57,reflection.y));
+        vec3 color=mix(vec3(.022,.216,.222),vec3(.11,.39,.30),edge*.73+.084*wave);
+        color=mix(color,reflectedSky,fresnel*.67);
+        color+=vec3(.19,.31,.27)*shimmer*.58+edge*vec3(.036,.064,.043);
         gl_FragColor=vec4(color,1.);
         #include <colorspace_fragment>
       }

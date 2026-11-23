@@ -1,4 +1,4 @@
-# Vira-Lata Racing 0.6
+# Vira-Lata Racing 0.7
 
 Use Node.js 24. No terminal, abra a pasta extraída e execute:
 
@@ -29,6 +29,8 @@ Na Volta do Ribeirão, a curva longa do lado direito permite carregar os três n
 ## Build e Vercel
 
 Execute `npm test` para verificar a aceleração, marcha à ré, aderência, turbo, colisões e compressão da suspensão.
+
+Os arquivos de autoria e as instruções para regenerar os modelos estão em `tools/`. O jogo carrega os quatro GLBs de `public/models/` automaticamente.
 
 Execute `npm run build` para gerar `dist/` e `npm run preview` para testar o build por HTTP. O ZIP já inclui o build verificado.
 

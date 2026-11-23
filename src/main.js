@@ -8,20 +8,12 @@ import {
   surfaceAt,
   terrainGeometry,
 } from "./course.js";
-import {
-  bendableLoft,
-  bodySculpt,
-  coatPalette,
-  headSculpt,
-  muzzleSculpt,
-  pawSculpt,
-} from "./sculpt.js";
+import { loadModels } from "./models.js";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { KART_SCALE, moveKart, rectangle, trunk } from "./collisions.js";
 import {
   bananaGeometry,
-  loft,
   paintTexture,
   questionFace,
   surfaceTexture,
@@ -75,27 +67,30 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFShadowMap;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.12;
+renderer.toneMappingExposure = 1.06;
 const studio = new RoomEnvironment();
 const environment = new THREE.PMREMGenerator(renderer);
 scene.environment = environment.fromScene(studio, 0.07).texture;
-scene.environmentIntensity = 0.46;
+scene.environmentIntensity = 0.53;
 environment.dispose();
 studio.dispose();
 $("app").prepend(renderer.domElement);
 scene.add(new THREE.HemisphereLight(0xf5fbff, 0x98b16f, 1.85));
 const sun = new THREE.DirectionalLight(0xffedc7, 2.75);
-sun.position.set(-25, 50, 20);
+const sunOffset = new THREE.Vector3(-25, 50, 20);
+sun.position.copy(sunOffset);
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.radius = 2.6;
 sun.shadow.bias = -0.00025;
 sun.shadow.normalBias = 0.035;
 sun.shadow.camera.far = 200;
-sun.shadow.camera.left = -115;
-sun.shadow.camera.right = 115;
-sun.shadow.camera.top = 115;
-sun.shadow.camera.bottom = -115;
-scene.add(sun);
+sun.shadow.camera.left = -51;
+sun.shadow.camera.right = 51;
+sun.shadow.camera.top = 51;
+sun.shadow.camera.bottom = -51;
+scene.add(sun, sun.target);
+const models = await loadModels();
 const solids = [];
 const mat = (c, r = 0.8, m = 0) =>
     new THREE.MeshStandardMaterial({ color: c, roughness: r, metalness: m }),
@@ -127,12 +122,66 @@ function sphere(r, m, p, g = scene, s = 1) {
 function cyl(r1, r2, h, m, p, g = scene) {
   return mesh(new THREE.CylinderGeometry(r1, r2, h, 12), m, p, g);
 }
-const grassMap = surfaceTexture("#a8ca73", ["#a1c26c", "#afcf77", "#9cbc64"]);
-grassMap.repeat.set(54, 54);
+const grassMap = paintTexture(256, (ctx, size) => {
+  ctx.fillStyle = "#96b681";
+  ctx.fillRect(0, 0, size, size);
+  const grain = surfaceTexture("#9db780", [
+    "#a9c28a",
+    "#8cac72",
+    "#78996a",
+    "#b2c197",
+  ]);
+  ctx.drawImage(grain.image, 0, 0);
+  for (let i = 0; i < 38; i++) {
+    const x = (i * 93) % size,
+      y = (i * 153) % size;
+    const tint = ctx.createRadialGradient(x, y, 0, x, y, 14 + (i % 13));
+    tint.addColorStop(0, i % 3 ? "#52783938" : "#d9ca8841");
+    tint.addColorStop(1, "#829e4900");
+    ctx.fillStyle = tint;
+    ctx.fillRect(x - 29, y - 29, 58, 58);
+  }
+  grain.dispose();
+});
+grassMap.wrapS = grassMap.wrapT = THREE.RepeatWrapping;
+grassMap.repeat.set(64, 64);
 green.map = grassMap;
-green.color.setHex(0xbcd98c);
-roadMat.map = surfaceTexture("#777d89", ["#808490", "#6d7380", "#747987"]);
-roadMat.color.setHex(0xc7cbd6);
+green.color.setHex(0xd9e3b9);
+roadMat.map = surfaceTexture("#777579", [
+  "#8b898b",
+  "#64646a",
+  "#929193",
+  "#525057",
+]);
+const roadRelief = paintTexture(256, (ctx, size) => {
+  const stone = new Float32Array(size * size);
+  let value = 934152;
+  for (let i = 0; i < stone.length; i++) {
+    value = (Math.imul(value, 1664525) + 1013904223) >>> 0;
+    stone[i] = (value / 4294967296) ** 2;
+  }
+  const pixels = ctx.createImageData(size, size);
+  const clamp = (x, y) => stone[(y & 255) * size + (x & 255)];
+  for (let y = 0; y < size; y++)
+    for (let x = 0; x < size; x++) {
+      const i = (y * size + x) * 4;
+      const nx = (clamp(x - 1, y) - clamp(x + 1, y)) * 0.35;
+      const ny = (clamp(x, y - 1) - clamp(x, y + 1)) * 0.35;
+      const length = Math.hypot(1, nx, ny);
+      pixels.data[i] = 128 + (127 * nx) / length;
+      pixels.data[i + 1] = 128 + (127 * ny) / length;
+      pixels.data[i + 2] = 128 + 127 / length;
+      pixels.data[i + 3] = 255;
+    }
+  ctx.putImageData(pixels, 0, 0);
+});
+roadRelief.colorSpace = THREE.NoColorSpace;
+roadRelief.wrapS = roadRelief.wrapT = THREE.RepeatWrapping;
+roadRelief.repeat.set(3, 4);
+roadMat.normalMap = roadRelief;
+roadMat.normalScale.set(0.29, 0.29);
+roadMat.color.setHex(0xcac7cc);
+roadMat.roughness = 0.91;
 const terrain = new THREE.Mesh(terrainGeometry(), green);
 green.vertexColors = true;
 terrain.receiveShadow = true;
@@ -242,6 +291,47 @@ function trackSurface() {
   scene.add(o);
 }
 trackSurface();
+const tirePrint = paintTexture(128, (ctx, size) => {
+  const fade = ctx.createLinearGradient(0, 0, 0, size);
+  fade.addColorStop(0, "#231e2600");
+  fade.addColorStop(0.25, "#231e2677");
+  fade.addColorStop(0.7, "#211e257f");
+  fade.addColorStop(1, "#211e2500");
+  ctx.fillStyle = fade;
+  for (const x of [37, 85]) {
+    ctx.fillRect(x - 3, 0, 6, size);
+    for (let j = 0; j < 128; j += 8) ctx.fillRect(x - 6 + (j % 4), j, 12, 3);
+  }
+});
+const tirePrintMaterial = new THREE.MeshStandardMaterial({
+  color: 0x534b55,
+  map: tirePrint,
+  transparent: true,
+  opacity: 0.58,
+  depthWrite: false,
+  roughness: 1,
+});
+for (const t of [
+  0.1, 0.19, 0.25, 0.268, 0.34, 0.45, 0.53, 0.609, 0.703, 0.954,
+]) {
+  const point = sample(t),
+    direction = tangent(t);
+  const offset = ((t * 190) % 3) - 1.5;
+  point.addScaledVector(
+    new THREE.Vector3(-direction.z, 0, direction.x),
+    offset,
+  );
+  if (surfaceAt(point) === 1) continue;
+  const mark = mesh(
+    new THREE.PlaneGeometry(2.8, 6 + Math.sin(t * 88) * 2),
+    tirePrintMaterial,
+    [point.x, 0.025, point.z],
+  );
+  mark.rotation.order = "YXZ";
+  mark.rotation.set(-Math.PI / 2, Math.atan2(direction.x, direction.z), 0);
+  mark.castShadow = false;
+}
+
 ribbon(width / 2, white, 0.035);
 ribbon(-width / 2, white, 0.035);
 const railMaterial = mat(0x184850, 0.51);
@@ -374,43 +464,85 @@ function rnd() {
   seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
   return seed / 4294967296;
 }
-const canopyMaterials = [leaf, mat(0x437f59), mat(0x76a74b), mat(0x549147)];
 const canopyShape = new THREE.SphereGeometry(1, 18, 12);
-for (let i = 0; i < 200; i++) {
-  const originalX = (rnd() - 0.5) * 166;
-  const originalZ = (rnd() - 0.5) * 138;
-  const x = originalX * COURSE_SCALE;
-  const z = originalZ * COURSE_SCALE;
+const placements = new Map();
+function plant(name, x, y, z, scale = 1) {
+  const matrix = new THREE.Matrix4().compose(
+    new THREE.Vector3(x, y, z),
+    new THREE.Quaternion().setFromAxisAngle(
+      new THREE.Vector3(0, 1, 0),
+      rnd() * Math.PI * 2,
+    ),
+    new THREE.Vector3(scale, scale, scale),
+  );
+  const key = name + "/" + Math.floor(x / 39) + "/" + Math.floor(z / 39);
+  if (!placements.has(key)) placements.set(key, []);
+  placements.get(key).push(matrix);
+}
+function placeVegetation() {
+  models.grove.updateMatrixWorld(true);
+  const prototypes = new Map();
+  for (const [key, matrices] of placements) {
+    const name = key.split("/")[0];
+    const prototype = models.grove.getObjectByName(name);
+    if (!prototypes.has(name)) {
+      const byMaterial = new Map();
+      prototype.traverse((part) => {
+        if (!part.isMesh) return;
+        const pieces = byMaterial.get(part.material) ?? [];
+        const geometry = part.geometry.index
+          ? part.geometry.toNonIndexed()
+          : part.geometry.clone();
+        // Quantized GLB positions must be promoted before baking node transforms.
+        for (const semantic of ["position", "normal"]) {
+          const attribute = geometry.getAttribute(semantic);
+          if (!attribute) continue;
+          const floats = new Float32Array(attribute.count * 3);
+          for (let i = 0; i < attribute.count; i++) {
+            floats[i * 3] = attribute.getX(i);
+            floats[i * 3 + 1] = attribute.getY(i);
+            floats[i * 3 + 2] = attribute.getZ(i);
+          }
+          geometry.setAttribute(semantic, new THREE.BufferAttribute(floats, 3));
+        }
+        pieces.push(geometry.applyMatrix4(part.matrixWorld));
+        byMaterial.set(part.material, pieces);
+      });
+      prototypes.set(
+        name,
+        [...byMaterial].map(([material, pieces]) => {
+          const combined = mergeGeometries(pieces);
+          if (!combined)
+            throw new Error("Malha de vegetação inválida: " + name);
+          pieces.forEach((geometry) => geometry.dispose());
+          return [material, combined];
+        }),
+      );
+    }
+    for (const [material, combined] of prototypes.get(name)) {
+      const mesh = new THREE.InstancedMesh(combined, material, matrices.length);
+      matrices.forEach((matrix, i) => mesh.setMatrixAt(i, matrix));
+      mesh.castShadow = name.startsWith("Tree");
+      mesh.receiveShadow = true;
+      scene.add(mesh);
+    }
+  }
+}
+for (let i = 0; i < 242; i++) {
+  const originalX = (rnd() - 0.5) * 176;
+  const originalZ = (rnd() - 0.5) * 146;
+  const x = originalX * COURSE_SCALE,
+    z = originalZ * COURSE_SCALE;
   if (
-    channelDistance(x, z) < 3.1 ||
-    Math.hypot(originalX, originalZ) > 101 ||
+    channelDistance(x, z) < 5 ||
     closest(new THREE.Vector3(x, 0, z)).dist <
-      width / 2 + shoulderWidth + 2.15 ||
-    (originalX > 16 && originalX < 41 && originalZ > -16 && originalZ < 8)
+      width / 2 + shoulderWidth + 3.9 ||
+    (originalX > 15 && originalX < 43 && originalZ > -16 && originalZ < 8)
   )
     continue;
-  const height = 2.7 + rnd() * 3.4;
-  const thick = 0.27 + height * 0.045;
-  cyl(thick * 0.56, thick, height, brown, [x, height / 2, z]);
-  solids.push(trunk(x, z, thick, height));
-  for (const sign of [-1, 1]) {
-    const branch = cyl(thick * 0.36, thick * 0.65, 1.7, brown, [
-      x + sign * 0.46,
-      height - 0.75,
-      z,
-    ]);
-    branch.rotation.z = -sign * 0.58;
-  }
-  for (let j = 0; j < 4; j++) {
-    const angle = (j * Math.PI) / 2;
-    const crown = mesh(
-      canopyShape,
-      canopyMaterials[(j + i) % canopyMaterials.length],
-      [x + Math.sin(angle) * 1.1, height + rnd(), z + Math.cos(angle) * 0.9],
-    );
-    const size = 1.35 + rnd() * 0.65;
-    crown.scale.set(size, size * (1 + rnd() * 0.4), size);
-  }
+  const scale = 0.78 + rnd() * 0.61;
+  plant("Tree" + (i % 3), x, -0.1, z, scale);
+  solids.push(trunk(x, z, 0.42 * scale, 4.35 * scale));
 }
 const granite = mat(0x788878, 0.94);
 const moss = mat(0x829449, 0.92);
@@ -457,19 +589,18 @@ for (let i = 0; i < 21; i++) {
   hill.scale.set(19 + rnd() * 21, 14 + rnd() * 16, 21 + rnd() * 13);
   hill.castShadow = false;
 }
-const flowers = [mat(0xffa8b8), mat(0xffcf5b), mat(0xe5e9ff)];
-for (let i = 0; i < 45; i++) {
-  const t = (i + rnd()) / 45;
-  const point = railPoint(t, i % 2 ? -1 : 1).lerp(sample(t), -0.27);
-  for (let j = 0; j < 3; j++) {
-    const flower = mesh(canopyShape, flowers[i % 3], [
-      point.x + rnd(),
-      0.2 + rnd() * 0.16,
-      point.z + rnd(),
-    ]);
-    flower.scale.set(0.14, 0.09, 0.14);
-    flower.castShadow = false;
-  }
+for (let i = 0; i < 99; i++) {
+  const t = (i + 0.52) / 99;
+  const side = i % 2 === 0 ? 1 : -1;
+  const edge = railPoint(t, side).lerp(sample(t), -0.21 - rnd() * 0.23);
+  if (channelDistance(edge.x, edge.z) < 2.7) continue;
+  plant(
+    i % 3 === 0 ? "Shrub" : "Flowers",
+    edge.x,
+    -0.105,
+    edge.z,
+    0.62 + rnd() * 0.48,
+  );
 }
 const cloud = new THREE.MeshBasicMaterial({ color: 0xfff5df, fog: false });
 for (let i = 0; i < 12; i++) {
@@ -583,39 +714,12 @@ for (const side of [-1, 1]) {
     shelter,
   );
   planter.rotation.y = side * 0.22;
-  for (let j = 0; j < 3; j++) {
-    const fern = mesh(
-      canopyShape,
-      leaf,
-      [side * 3.98 + (j - 1) * 0.21, 0.95 + j * 0.11, -2.06],
-      shelter,
-    );
-    fern.scale.set(0.25, 0.48, 0.26);
-  }
+  const fern = models.grove.getObjectByName("Shrub").clone(true);
+  fern.position.set(side * 3.98, 0.8, -2.06);
+  fern.scale.setScalar(0.61);
+  shelter.add(fern);
 }
-for (const [x, z] of [
-  [-19, 35],
-  [21, -26],
-  [53, 31],
-  [-29, -20],
-  [-63, 10],
-  [65, -38],
-  [8, 23],
-]) {
-  if (
-    channelDistance(x, z) < 2 ||
-    closest(new THREE.Vector3(x, 0, z)).dist < 10
-  )
-    continue;
-  for (let i = 0; i < 4; i++) {
-    const bush = mesh(canopyShape, canopyMaterials[i], [
-      x + (i - 1.5) * 0.72,
-      0.37 + i * 0.17,
-      z + Math.sin(i) * 0.62,
-    ]);
-    bush.scale.set(0.83, 0.69, 0.87);
-  }
-}
+placeVegetation();
 // Hand-painted mileposts and patterned bridge entrances give the course its own landmarks.
 const tileInk = mat(0x26706d, 0.42);
 tileInk.map = paintTexture(128, (ctx, size) => {
@@ -754,6 +858,7 @@ function batchScenery() {
   scene.traverse((object) => {
     if (
       !object.isMesh ||
+      object.isInstancedMesh ||
       object === sky ||
       object === river ||
       !object.visible ||
@@ -787,716 +892,46 @@ function batchScenery() {
   }
 }
 batchScenery();
-const kart = new THREE.Group();
-kart.scale.setScalar(KART_SCALE);
-scene.add(kart);
-const body = new THREE.Group();
-kart.add(body);
-body.scale.set(0.9, 0.98, 0.79);
-const chassisPaint = new THREE.MeshPhysicalMaterial({
-  color: 0x137e64,
-  metalness: 0.26,
-  roughness: 0.27,
-  clearcoat: 1,
-  clearcoatRoughness: 0.19,
+const { kart, body, wheels, wheelFace, tailLamp, exhaustGlows, dog, cat } =
+  models;
+const softDisc = paintTexture(96, (ctx, size) => {
+  const light = ctx.createRadialGradient(48, 48, 1, 48, 48, 46);
+  light.addColorStop(0, "#ffffffff");
+  light.addColorStop(0.31, "#ffffffa0");
+  light.addColorStop(0.67, "#ffffff48");
+  light.addColorStop(1, "#ffffff00");
+  ctx.fillStyle = light;
+  ctx.fillRect(0, 0, size, size);
 });
-const chrome = mat(0xb9dee6, 0.28, 0.61);
-const seat = mat(0x223a35, 0.93);
-const pearl = new THREE.MeshPhysicalMaterial({
-  color: 0xe6d19c,
-  roughness: 0.32,
-  metalness: 0.16,
-  clearcoat: 0.82,
-});
-const tireMaterial = mat(0x282c32, 0.97);
-const hubAccent = mat(0xc18e59, 0.37, 0.6);
-const milled = mat(0x95b7af, 0.45, 0.52);
-const instrument = mat(0x2a454e, 0.3);
-instrument.emissive.setHex(0x338e9a);
-instrument.emissiveIntensity = 0.32;
-const exhaustGlows = [];
-
-const lamp = mat(0xffdfa3, 0.23);
-lamp.emissive.setHex(0xffbe68);
-lamp.emissiveIntensity = 0.55;
-const bumper = mat(0x314859, 0.38, 0.17);
-for (const z of [-2.39, 2.34]) {
-  mesh(
-    loft(
-      [
-        [0, 0.56, z - 0.17, 0, 0.02],
-        [0, 0.56, z - 0.09, 0.85, 0.105],
-        [0, 0.56, z + 0.03, 0.88, 0.105],
-        [0, 0.56, z + 0.16, 0, 0.02],
-      ],
-      0.55,
-    ),
-    bumper,
-    [0, 0, 0],
-    body,
-  );
-}
-const tailLamp = mat(0xd1264a, 0.3);
-tailLamp.emissive.setHex(0xc91f38);
-tailLamp.emissiveIntensity = 0.45;
-mesh(
-  loft(
-    [
-      [0, 0.76, -2.48, 0.02, 0.02],
-      [0, 0.88, -2.25, 0.72, 0.16],
-      [0, 1.013, -1.53, 1.15, 0.37],
-      [0, 0.83, -0.39, 1.17, 0.24],
-      [0, 0.88, 1.24, 1.26, 0.31],
-      [0, 0.82, 2.08, 1.09, 0.29],
-      [0, 0.8, 2.3, 0.02, 0.02],
-    ],
-    0.55,
-  ),
-  chassisPaint,
-  [0, 0, 0],
-  body,
+const contactShade = new THREE.Mesh(
+  new THREE.PlaneGeometry(3.9, 4.7),
+  new THREE.MeshBasicMaterial({
+    color: 0x263542,
+    map: softDisc,
+    transparent: true,
+    depthWrite: false,
+    opacity: 0.36,
+  }),
 );
-mesh(
-  loft(
-    [
-      [0, 0.57, -2.47, 0.02, 0.02],
-      [0, 0.55, -2.22, 1.08, 0.14],
-      [0, 0.53, -0.8, 1.28, 0.15],
-      [0, 0.53, 1.4, 1.3, 0.13],
-      [0, 0.55, 2.25, 1.14, 0.16],
-      [0, 0.58, 2.44, 0.02, 0.02],
-    ],
-    0.49,
-  ),
-  dark,
-  [0, 0, 0],
-  body,
-);
-const bonnet = mesh(
-  loft(
-    [
-      [0, 0.93, -2.38, 0.015, 0.015],
-      [0, 1.007, -2.14, 0.54, 0.095],
-      [0, 1.19, -1.72, 0.71, 0.162],
-      [0, 1.3, -1.27, 0.61, 0.17],
-      [0, 1.36, -0.97, 0.32, 0.09],
-      [0, 1.34, -0.78, 0.012, 0.015],
-    ],
-    0.59,
-  ),
-  pearl,
-  [0, 0, 0],
-  body,
-);
-const intakeRim = mesh(
-  loft(
-    [
-      [0, 0.78, -2.5, 0.01, 0.01],
-      [0, 0.78, -2.465, 0.45, 0.087],
-      [0, 0.78, -2.41, 0.52, 0.085],
-      [0, 0.78, -2.31, 0.025, 0.016],
-    ],
-    0.47,
-  ),
-  milled,
-  [0, 0, 0],
-  body,
-);
-for (let i = -4; i <= 4; i++)
-  box(0.052, 0.112, 0.018, seat, [i * 0.091, 0.78, -2.484], body);
-const dash = mesh(
-  loft(
-    [
-      [0, 1.58, -1.41, 0.015, 0.02],
-      [0, 1.72, -1.36, 0.52, 0.12],
-      [0, 1.74, -1.16, 0.48, 0.12],
-      [0, 1.68, -1.05, 0.02, 0.012],
-    ],
-    0.49,
-  ),
-  bumper,
-  [0, 0, 0],
-  body,
-);
-for (const x of [-0.2, 0, 0.2]) {
-  const meter = sphere(
-    x === 0 ? 0.13 : 0.102,
-    instrument,
-    [x, 1.765, -1.08],
-    body,
-  );
-  meter.scale.set(1, 0.68, 0.32);
-}
-for (const side of [-1, 1]) {
-  mesh(
-    loft(
-      [
-        [0, 0.01, -0.75, 0.015, 0.015],
-        [0, 0.03, -0.45, 0.21, 0.14],
-        [0, 0, 0.38, 0.23, 0.16],
-        [0, 0.05, 0.84, 0.014, 0.014],
-      ],
-      0.63,
-    ),
-    yellow,
-    [side * 1.24, 0.82, 0.1],
-    body,
-  );
-  const headlight = sphere(0.2, lamp, [side * 0.56, 0.94, -2.263], body);
-  headlight.scale.set(1.51, 0.69, 0.39);
-  headlight.rotation.y = side * -0.22;
-  const bezel = sphere(0.238, milled, [side * 0.56, 0.94, -2.238], body);
-  bezel.scale.set(1.36, 0.72, 0.39);
-  bezel.rotation.y = side * -0.22;
-  for (let i = 0; i < 3; i++) {
-    const led = sphere(
-      0.055,
-      lamp,
-      [side * 0.56 + (i - 1) * 0.105, 0.94, -2.327 + i * side * 0.018],
-      body,
-    );
-    led.scale.set(1, 1, 0.39);
-  }
-  const brakeLight = sphere(0.18, tailLamp, [side * 0.66, 0.93, 2.09], body);
-  brakeLight.scale.set(1.68, 0.65, 0.46);
-  const exhaust = cyl(
-    0.13,
-    0.16,
-    0.46,
-    chrome,
-    [side * 0.93, 0.67, 2.05],
-    body,
-  );
-  exhaust.rotation.x = Math.PI / 2;
-  const opening = cyl(0.094, 0.1, 0.02, dark, [side * 0.93, 0.67, 2.29], body);
-  opening.rotation.x = Math.PI / 2;
-  const glow = new THREE.Mesh(
-    new THREE.CircleGeometry(0.095, 24),
-    new THREE.MeshBasicMaterial({
-      color: 0x54d7ff,
+contactShade.rotation.x = -Math.PI / 2;
+scene.add(contactShade);
+const turboHalos = exhaustGlows.map((nozzle) => {
+  const glow = new THREE.Sprite(
+    new THREE.SpriteMaterial({
+      map: softDisc,
       transparent: true,
       opacity: 0,
       depthWrite: false,
-      side: THREE.DoubleSide,
+      blending: THREE.AdditiveBlending,
     }),
   );
-  glow.position.set(side * 0.93, 0.67, 2.31);
-  body.add(glow);
-  exhaustGlows.push(glow);
-  const rearLip = box(
-    0.47,
-    0.095,
-    0.72,
-    pearl,
-    [side * 0.69, 1.06, 1.95],
-    body,
-  );
-  rearLip.rotation.y = side * 0.22;
-}
-for (const z of [-0.7, 1.14]) {
-  mesh(
-    loft(
-      [
-        [0, 1.24, z - 0.73, 0.012, 0.012],
-        [0, 1.27, z - 0.46, 0.56, 0.095],
-        [0, 1.29, z - 0.05, 0.65, 0.13],
-        [0, 1.48, z + 0.36, 0.64, 0.3],
-        [0, 1.67, z + 0.55, 0.63, 0.33],
-        [0, 1.64, z + 0.73, 0.024, 0.031],
-      ],
-      0.57,
-    ),
-    seat,
-    [0, 0, 0],
-    body,
-  );
-  const pad = sphere(0.52, milled, [0, 1.64, z + 0.307], body);
-  pad.scale.set(1.05, 0.61, 0.23);
-  for (const side of [-1, 1]) {
-    const bolster = sphere(0.34, seat, [side * 0.43, 1.47, z + 0.08], body);
-    bolster.scale.set(0.48, 0.62, 1.55);
-  }
-}
-const gripRubber = mat(0x252934, 0.85);
-const handHolds = new THREE.Group();
-body.add(handHolds);
-for (const side of [-1, 1]) {
-  const tubePath = new THREE.CatmullRomCurve3([
-    new THREE.Vector3(side * 0.72, 1.18, 0.5),
-    new THREE.Vector3(side * 0.7, 1.74, 0.59),
-    new THREE.Vector3(side * 0.69, 1.91, 0.79),
-    new THREE.Vector3(side * 0.68, 1.86, 1.13),
-    new THREE.Vector3(side * 0.65, 1.25, 1.43),
-  ]);
-  mesh(
-    new THREE.TubeGeometry(tubePath, 21, 0.064, 9, false),
-    milled,
-    [0, 0, 0],
-    handHolds,
-  );
-  const gripPath = new THREE.CatmullRomCurve3(
-    [0.36, 0.44, 0.52, 0.6].map((t) => tubePath.getPoint(t)),
-  );
-  mesh(
-    new THREE.TubeGeometry(gripPath, 12, 0.085, 9, false),
-    gripRubber,
-    [0, 0, 0],
-    handHolds,
-  );
-}
-const numberMap = paintTexture(128, (ctx) => {
-  ctx.fillStyle = "#f4d28b";
-  ctx.fillRect(0, 0, 128, 128);
-  ctx.strokeStyle = "#984d30";
-  ctx.lineWidth = 8;
-  ctx.beginPath();
-  ctx.arc(64, 64, 58, 0, 2 * Math.PI);
-  ctx.stroke();
-  ctx.strokeStyle = "#137e64";
-  ctx.lineWidth = 3;
-  ctx.beginPath();
-  ctx.arc(64, 64, 49, 0, 2 * Math.PI);
-  ctx.stroke();
-  ctx.font = "900 86px system-ui";
-  ctx.fillStyle = "#184554";
-  ctx.textAlign = "center";
-  ctx.fillText("02", 64, 94);
+  glow.position.z = 0.1;
+  glow.scale.set(0.91, 0.65, 1);
+  nozzle.add(glow);
+  return glow;
 });
-const badge = mesh(
-  new THREE.CircleGeometry(0.31, 32),
-  new THREE.MeshBasicMaterial({ map: numberMap }),
-  [0, 1.49, -1.28],
-  body,
-);
-badge.rotation.x = -Math.PI / 2;
-let wheels = [];
-for (let x of [-1.42, 1.42])
-  for (let z of [-1.5, 1.5]) {
-    let pivot = new THREE.Group();
-    pivot.position.set(x, 0.605, z);
-    body.add(pivot);
-    let axle = new THREE.Group();
-    pivot.add(axle);
-    axle.scale.set(1.23, 1.1, 1.32);
-    const profile = [
-      [0, -0.205],
-      [0.38, -0.205],
-      [0.45, -0.205],
-      [0.509, -0.167],
-      [0.538, -0.1],
-      [0.521, -0.075],
-      [0.538, -0.051],
-      [0.543, -0.008],
-      [0.525, 0.016],
-      [0.543, 0.04],
-      [0.534, 0.096],
-      [0.517, 0.12],
-      [0.526, 0.144],
-      [0.49, 0.185],
-      [0.449, 0.206],
-      [0, 0.206],
-    ].map(([radius, y]) => new THREE.Vector2(radius, y));
-    const wheel = mesh(
-      new THREE.LatheGeometry(profile, 48),
-      tireMaterial,
-      [0, 0, 0],
-      axle,
-    );
-    wheel.rotation.z = Math.PI / 2;
-    const lug = new THREE.InstancedMesh(
-      new THREE.BoxGeometry(0.19, 0.015, 0.071),
-      tireMaterial,
-      34,
-    );
-    const treadTransform = new THREE.Object3D();
-    for (let i = 0; i < 34; i++) {
-      const angle = (i * Math.PI * 2) / 34;
-      treadTransform.position.set(
-        i % 2 ? 0.106 : -0.106,
-        Math.cos(angle) * 0.531,
-        Math.sin(angle) * 0.531,
-      );
-      treadTransform.rotation.set(angle, 0, (i % 2 ? 1 : -1) * 0.24);
-      treadTransform.updateMatrix();
-      lug.setMatrixAt(i, treadTransform.matrix);
-    }
-    axle.add(lug);
-    let hub = cyl(0.3, 0.3, 0.38, white, [0, 0, 0], axle);
-    hub.rotation.z = Math.PI / 2;
-    const rim = mesh(
-      new THREE.TorusGeometry(0.29, 0.036, 10, 32),
-      chrome,
-      [Math.sign(x) * 0.22, 0, 0],
-      axle,
-    );
-    rim.rotation.y = Math.PI / 2;
-    const shockCurve = new THREE.CatmullRomCurve3(
-      Array.from({ length: 65 }, (_, i) => {
-        const t = i / 64,
-          angle = t * 12 * Math.PI;
-        return new THREE.Vector3(
-          Math.cos(angle) * 0.079,
-          t * 0.43,
-          Math.sin(angle) * 0.079,
-        );
-      }),
-    );
-    const spring = mesh(
-      new THREE.TubeGeometry(shockCurve, 64, 0.02, 6, false),
-      chrome,
-      [x * 0.76, 0.57, z + 0.22],
-      body,
-    );
-    spring.rotation.z = Math.sign(x) * 0.22;
-    const shaft = cyl(
-      0.052,
-      0.059,
-      0.54,
-      bumper,
-      [x * 0.76, 0.8, z + 0.22],
-      body,
-    );
-    shaft.rotation.z = spring.rotation.z;
-    for (let i = 0; i < 6; i++) {
-      const angle = (i * Math.PI) / 3;
-      sphere(
-        0.046,
-        hubAccent,
-        [Math.sign(x) * 0.225, Math.sin(angle) * 0.2, Math.cos(angle) * 0.2],
-        axle,
-      );
-    }
-    wheels.push({ pivot, axle, spring, front: z < 0, side: Math.sign(x) });
-  }
-let steering = new THREE.Group();
-steering.position.set(0, 2.05, -1.15);
-body.add(steering);
-const wheelFace = new THREE.Group();
-wheelFace.rotation.x = -0.55;
-steering.add(wheelFace);
-mesh(new THREE.TorusGeometry(0.52, 0.075, 8, 24), dark, [0, 0, 0], wheelFace);
-box(0.83, 0.11, 0.065, chrome, [0, 0, 0], wheelFace);
-box(0.11, 0.45, 0.065, chrome, [0, -0.23, 0], wheelFace);
-sphere(0.13, yellow, [0, 0, 0.05], wheelFace);
-steering.position.set(0, 2.26, -1.66);
-const pink = mat(0xd88a89, 0.54);
-const eyes = mat(0xffd757, 0.43);
-const pupil = mat(0x11131a, 0.33);
-const noseMaterial = new THREE.MeshPhysicalMaterial({
-  color: 0x262027,
-  roughness: 0.43,
-  clearcoat: 0.42,
-});
-const dogCoat = coatPalette(false);
-const catCoat = coatPalette(true);
-const pawGeometry = pawSculpt();
-const hindPawGeometry = pawSculpt(1.34);
-
-function furTufts(parent, material, side, origin, count, sweep) {
-  for (let i = 0; i < count; i++) {
-    const scale = 1 - i * 0.14;
-    const strand = mesh(
-      loft([
-        [0, 0.12, 0, 0.048, 0.043],
-        [side * 0.025, 0.045, 0.016, 0.059, 0.042],
-        [side * 0.067, -0.04, 0.032, 0.034, 0.028],
-        [side * 0.102, -0.153, 0.062, 0.002, 0.003],
-      ]),
-      material,
-      [
-        origin[0] + side * i * 0.026,
-        origin[1] - i * 0.055,
-        origin[2] + i * 0.019,
-      ],
-      parent,
-    );
-    strand.rotation.z = side * sweep;
-    strand.scale.setScalar(scale);
-  }
-}
-
-function mascot(cat) {
-  const root = new THREE.Group();
-  const palette = cat ? catCoat : dogCoat;
-  const m = palette.base;
-  const torso = mesh(bodySculpt(cat), m, [0, 0, 0], root);
-  const chest = mesh(
-    loft(
-      [
-        [0, 0.23, -0.26, 0.012, 0.018],
-        [0, 0.42, -0.32, 0.215, 0.06],
-        [0, 0.67, -0.343, 0.263, 0.086],
-        [0, 0.92, -0.302, 0.204, 0.071],
-        [0, 1.03, -0.229, 0.015, 0.014],
-      ],
-      0.89,
-    ),
-    palette.light,
-    [0, 0, 0],
-    root,
-  );
-  for (const side of [-1, 1])
-    furTufts(root, palette.light, side, [side * 0.13, 0.65, -0.39], 3, -0.24);
-  const head = new THREE.Group();
-  head.position.set(0, 1.53, cat ? -0.06 : -0.01);
-  root.add(head);
-  mesh(headSculpt(cat), m, [0, 0, 0], head);
-  const ears = [];
-  const eyeGroups = [];
-  for (const side of [-1, 1]) {
-    const ear = new THREE.Group();
-    ear.position.set(side * 0.43, 0.36, 0.01);
-    ear.rotation.z = side * (cat ? -0.28 : 0.64);
-    head.add(ear);
-    const profile = cat
-      ? [
-          [0, 0, 0, 0.21, 0.145],
-          [0, 0.19, -0.006, 0.23, 0.14],
-          [0, 0.46, 0.035, 0.135, 0.101],
-          [0, 0.66, 0.067, 0.012, 0.014],
-        ]
-      : [
-          [0, 0.08, 0, 0.16, 0.131],
-          [0, 0.21, 0.035, 0.21, 0.12],
-          [0, 0.08, 0.21, 0.225, 0.13],
-          [0, -0.29, 0.29, 0.198, 0.091],
-          [0, -0.45, 0.29, 0.015, 0.015],
-        ];
-    const earMesh = mesh(
-      bendableLoft(profile, 0.76, [side * 0.078, -0.095, 0.185]),
-      cat ? palette.base : palette.shade,
-      [0, 0, 0],
-      ear,
-    );
-    const innerProfile = profile.map(([x, y, z, w, h]) => [
-      x,
-      y * 0.78,
-      z * 0.86,
-      w * 0.65,
-      h * 0.43,
-    ]);
-    const lining = mesh(
-      bendableLoft(innerProfile, 0.88, [side * 0.078, -0.095, 0.185]),
-      palette.inner,
-      [0, cat ? 0.065 : -0.026, cat ? -0.101 : 0.159],
-      ear,
-    );
-    ears.push({ root: ear, meshes: [earMesh, lining] });
-    for (const position of cat
-      ? [
-          [side * 0.49, -0.14, -0.29],
-          [side * 0.51, -0.257, -0.24],
-        ]
-      : [[side * 0.42, 0.18, -0.28]]) {
-      furTufts(head, palette.base, side, position, cat ? 3 : 2, side * 0.66);
-    }
-    const eye = new THREE.Group();
-    eye.position.set(
-      side * (cat ? 0.272 : 0.259),
-      cat ? 0.135 : 0.162,
-      cat ? -0.405 : -0.475,
-    );
-    eye.rotation.y = -side * 0.32;
-    head.add(eye);
-    const socket = sphere(
-      0.2,
-      cat ? palette.shade : palette.shade,
-      [0, 0, 0.009],
-      eye,
-    );
-    socket.scale.set(0.89, 1.15, 0.6);
-    const sclera = sphere(0.177, cat ? eyes : white, [0, 0, -0.07], eye);
-    sclera.scale.set(0.8, 1.08, 0.49);
-    const gaze = new THREE.Group();
-    eye.add(gaze);
-    const iris = sphere(
-      0.118,
-      cat ? mat(0xe6a82e) : mat(0x6e442a),
-      [-side * 0.024, -0.015, -0.133],
-      gaze,
-    );
-    iris.scale.set(0.78, 1, 0.43);
-    const slit = sphere(0.087, pupil, [-side * 0.024, -0.012, -0.171], gaze);
-    slit.scale.set(cat ? 0.39 : 0.85, 1.05, 0.35);
-    sphere(0.024, white, [-side * 0.024 - 0.027, 0.021, -0.196], gaze);
-    const brow = sphere(0.114, palette.shade, [side * 0.01, 0.22, -0.037], eye);
-    brow.scale.set(1.22, 0.24, 0.43);
-    brow.rotation.z = side * 0.14;
-    eyeGroups.push({ eye, brow, slit, gaze, side });
-
-    if (cat) {
-      for (let i = 0; i < 3; i++) {
-        const whisker = mesh(
-          new THREE.TubeGeometry(
-            new THREE.QuadraticBezierCurve3(
-              new THREE.Vector3(side * 0.23, -0.22 - i * 0.057, -0.58),
-              new THREE.Vector3(side * 0.48, -0.19 - i * 0.075, -0.65),
-              new THREE.Vector3(side * 0.67, -0.16 - i * 0.12, -0.43),
-            ),
-            10,
-            0.009,
-            5,
-            false,
-          ),
-          mat(0x9996a0),
-          [0, 0, 0],
-          head,
-        );
-        whisker.castShadow = false;
-      }
-    }
-  }
-  mesh(muzzleSculpt(cat), palette.light, [0, 0, 0], head);
-  const muzzleEnd = cat ? -0.66 : -0.895;
-  const nose = mesh(
-    loft(
-      [
-        [0, -0.179, muzzleEnd - 0.058, 0.015, 0.01],
-        [0, -0.141, muzzleEnd - 0.036, cat ? 0.098 : 0.143, 0.078],
-        [0, -0.147, muzzleEnd + 0.045, cat ? 0.123 : 0.164, 0.082],
-        [0, -0.159, muzzleEnd + 0.101, 0.023, 0.015],
-      ],
-      0.64,
-    ),
-    cat ? pink : noseMaterial,
-    [0, 0, 0],
-    head,
-  );
-  for (const side of [-1, 1]) {
-    const nostril = sphere(
-      0.041,
-      pupil,
-      [side * (cat ? 0.042 : 0.072), -0.163, muzzleEnd - 0.026],
-      head,
-    );
-    nostril.scale.set(1, 0.61, 0.42);
-    for (let i = 0; i < 3; i++) {
-      sphere(
-        0.014,
-        palette.shade,
-        [
-          side * (0.141 + i * 0.046),
-          -0.204 - i * 0.037,
-          muzzleEnd + 0.032 + i * 0.021,
-        ],
-        head,
-      );
-    }
-  }
-  const jaw = new THREE.Group();
-  jaw.position.set(0, -0.269, cat ? -0.35 : -0.484);
-  head.add(jaw);
-  const lower = mesh(
-    loft(
-      [
-        [0, -0.06, -0.395, 0.02, 0.02],
-        [0, -0.083, -0.305, 0.185, 0.074],
-        [0, -0.079, -0.176, 0.257, 0.112],
-        [0, -0.041, -0.034, 0.217, 0.085],
-        [0, -0.016, 0.124, 0.066, 0.03],
-      ],
-      0.85,
-    ),
-    palette.light,
-    [0, 0, 0],
-    jaw,
-  );
-  lower.scale.z = cat ? 0.76 : 1;
-  const openMouth = sphere(
-    0.193,
-    pupil,
-    [0, -0.015, cat ? -0.231 : -0.294],
-    jaw,
-  );
-  openMouth.scale.set(1, 0.23, 0.56);
-  const tongue = sphere(0.108, pink, [0, -0.02, cat ? -0.28 : -0.36], jaw);
-  tongue.scale.set(1, 0.32, 0.75);
-  const smile = new THREE.Group();
-  head.add(smile);
-  for (const side of [-1, 1]) {
-    const path = new THREE.CubicBezierCurve3(
-      new THREE.Vector3(0, -0.294, muzzleEnd + 0.018),
-      new THREE.Vector3(side * 0.085, -0.357, muzzleEnd + 0.024),
-      new THREE.Vector3(side * 0.209, -0.36, muzzleEnd + 0.098),
-      new THREE.Vector3(side * 0.245, -0.279, muzzleEnd + 0.14),
-    );
-    mesh(
-      new THREE.TubeGeometry(path, 12, 0.017, 6, false),
-      pupil,
-      [0, 0, 0],
-      smile,
-    );
-  }
-  const collar = mesh(
-    new THREE.TorusGeometry(0.376, 0.06, 10, 32),
-    cat ? blue : red,
-    [0, 1.11, 0],
-    root,
-  );
-  collar.rotation.x = Math.PI / 2;
-  const tag = sphere(0.12, yellow, [0, 1.03, -0.405], root);
-  tag.scale.z = 0.4;
-  const arms = [];
-  for (let side of [-1, 1]) {
-    const shoulder = new THREE.Vector3(side * 0.4, 0.94, -0.14);
-    const upper = sphere(1, m, [0, 0, 0], root);
-    const lower = sphere(1, m, [0, 0, 0], root);
-    const paw = new THREE.Group();
-    root.add(paw);
-    mesh(pawGeometry, m, [0, 0, 0], paw);
-    arms.push({ shoulder, upper, lower, paw, side });
-  }
-  for (let side of [-1, 1]) {
-    const foot = mesh(hindPawGeometry, m, [side * 0.3, 0.135, -0.23], root);
-    foot.rotation.y = side * 0.11;
-  }
-  let tail = new THREE.Group();
-  tail.position.set(0, 0.6, 0.35);
-  root.add(tail);
-  const tailMesh = mesh(
-    bendableLoft(
-      cat
-        ? [
-            [0, 0, 0, 0.126, 0.11],
-            [0, 0.1, 0.32, 0.113, 0.105],
-            [0, 0.48, 0.6, 0.097, 0.102],
-            [0, 0.91, 0.63, 0.085, 0.083],
-            [0, 1.13, 0.43, 0.061, 0.062],
-            [0, 1.16, 0.28, 0.008, 0.008],
-          ]
-        : [
-            [0, 0, 0, 0.13, 0.115],
-            [0, 0.13, 0.27, 0.112, 0.108],
-            [0, 0.36, 0.44, 0.09, 0.085],
-            [0, 0.59, 0.48, 0.019, 0.019],
-          ],
-      0.82,
-      [0.23, -0.19, 0.14],
-    ),
-    m,
-    [0, 0, 0],
-    tail,
-  );
-  return {
-    root,
-    head,
-    arms,
-    tail,
-    cat,
-    ears,
-    eyeGroups,
-    smile,
-    openMouth,
-    jaw,
-    tongue,
-    tailMesh,
-    chest,
-    torso,
-    item: null,
-  };
-}
-let dog = mascot(false),
-  cat = mascot(true);
+kart.scale.setScalar(KART_SCALE);
+scene.add(kart);
 body.add(dog.root, cat.root);
 let pilotDog = true,
   swap = 0,
@@ -2358,6 +1793,14 @@ function tick() {
   }
   updateDust(visualDt, dustActive);
   kart.position.set(position.x, y, position.z);
+  if (renderer.shadowMap.enabled) {
+    sun.target.position.set(position.x, 0, position.z);
+    sun.position.copy(sun.target.position).add(sunOffset);
+  }
+  contactShade.position.set(position.x, 0.039, position.z);
+  contactShade.rotation.z = heading;
+  contactShade.material.opacity = 0.34 * Math.exp(-3 * y);
+  contactShade.visible = renderer.shadowMap.enabled;
   kart.rotation.y = heading + Math.PI + slipAngle;
   const turn = vehicle.steer;
   const gain = 1 - Math.exp(-11 * visualDt);
@@ -2435,7 +1878,14 @@ function tick() {
     m.tail.rotation.y += slide * 0.33;
     m.head.rotation.y +=
       Math.sin(now * 2.3) * 0.05 + (m.cat ? -0.15 : 0.17) * jump;
-    m.chest.scale.y = 1 + Math.sin(now * 4.4) * 0.022;
+    m.mixer.update(visualDt);
+    m.scarf.morphTargetInfluences[0] = THREE.MathUtils.clamp(
+      Math.abs(velocity) / 42 +
+        Math.sin(now * 9) * 0.11 +
+        Math.abs(slide) * 0.23,
+      0,
+      1,
+    );
     for (const [i, { eye, brow, slit, gaze, side }] of m.eyeGroups.entries()) {
       const blink =
         Math.max(0, Math.cos(now * 1.74 + 1.1 + Number(m.cat)) - 0.985) / 0.015;
@@ -2558,6 +2008,16 @@ function tick() {
       1 - Math.exp(-15 * visualDt),
     );
     glow.scale.setScalar(1 + 0.17 * Math.sin(now * 46));
+  }
+  for (const halo of turboHalos) {
+    halo.material.color.setHex(glowColor);
+    halo.material.opacity = THREE.MathUtils.damp(
+      halo.material.opacity,
+      visualBoost ? 0.66 : 0,
+      11,
+      visualDt,
+    );
+    halo.visible = halo.material.opacity > 0.013;
   }
   camera.updateProjectionMatrix();
   renderer.render(scene, camera);
