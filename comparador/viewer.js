@@ -110,7 +110,7 @@ async function show() {
         ? gltfJson.materials.length + " materiais"
         : "cor por vértice") +
       " · " +
-      (gltfJson.skins?.length ? "cauda com rig" : "sem rig") +
+      (gltfJson.skins?.length ? "braços e cauda com rig" : "sem rig") +
       " · " +
       (gltf.animations.length === 1
         ? "1 clipe"

@@ -945,7 +945,7 @@ function bandanaPanel(root) {
       const x = w * (0.324 * (1 - v) + 0.012);
       const y = 1.186 - v * 0.415 - Math.abs(w) * (1 - v) * 0.07;
       const z =
-        -0.222 -
+        -0.318 -
         0.145 * (1 - w * w) -
         0.074 * v +
         0.016 * Math.sin(w * 9) * (1 - v);
