@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { ArcadeVehicle, PHYSICS_STEP } from "./vehicle.js";
 import {
   centerline,
   COURSE_SCALE,
@@ -615,6 +616,43 @@ for (const [x, z] of [
     bush.scale.set(0.83, 0.69, 0.87);
   }
 }
+// Hand-painted mileposts and patterned bridge entrances give the course its own landmarks.
+const tileInk = mat(0x26706d, 0.42);
+tileInk.map = paintTexture(128, (ctx, size) => {
+  ctx.fillStyle = "#e8d0a1";
+  ctx.fillRect(0, 0, size, size);
+  ctx.strokeStyle = "#216b69";
+  ctx.lineWidth = 9;
+  for (const x of [0, 64, 128])
+    for (const y of [0, 64, 128]) {
+      ctx.beginPath();
+      ctx.moveTo(x - 29, y);
+      ctx.lineTo(x, y - 29);
+      ctx.lineTo(x + 29, y);
+      ctx.lineTo(x, y + 29);
+      ctx.closePath();
+      ctx.stroke();
+    }
+});
+const bronze = mat(0xad6440, 0.46, 0.25);
+for (const t of [0.04, 0.12, 0.4, 0.58, 0.72, 0.97]) {
+  const d = tangent(t);
+  const p = railPoint(t, t > 0.5 ? -1 : 1).lerp(sample(t), -0.17);
+  const post = new THREE.Group();
+  post.position.copy(p);
+  post.rotation.y = Math.atan2(d.x, d.z);
+  scene.add(post);
+  box(0.42, 1.29, 0.45, bridgeSteel, [0, 0.66, 0], post);
+  box(
+    0.52,
+    0.53,
+    0.07,
+    [bridgeSteel, bridgeSteel, bridgeSteel, bridgeSteel, tileInk, tileInk],
+    [0, 0.93, 0],
+    post,
+  );
+  box(0.59, 0.11, 0.58, bronze, [0, 1.35, 0], post);
+}
 const chevrons = [-1, 1].map((side) => {
   const material = mat(0xffffff, 0.53);
   material.map = paintTexture(256, (ctx, size) => {
@@ -771,6 +809,7 @@ const pearl = new THREE.MeshPhysicalMaterial({
   clearcoat: 0.82,
 });
 const tireMaterial = mat(0x282c32, 0.97);
+const hubAccent = mat(0xc18e59, 0.37, 0.6);
 const milled = mat(0x95b7af, 0.45, 0.52);
 const instrument = mat(0x2a454e, 0.3);
 instrument.emissive.setHex(0x338e9a);
@@ -978,9 +1017,46 @@ for (const z of [-0.7, 1.14]) {
     bolster.scale.set(0.48, 0.62, 1.55);
   }
 }
+const gripRubber = mat(0x252934, 0.85);
+const handHolds = new THREE.Group();
+body.add(handHolds);
+for (const side of [-1, 1]) {
+  const tubePath = new THREE.CatmullRomCurve3([
+    new THREE.Vector3(side * 0.72, 1.18, 0.5),
+    new THREE.Vector3(side * 0.7, 1.74, 0.59),
+    new THREE.Vector3(side * 0.69, 1.91, 0.79),
+    new THREE.Vector3(side * 0.68, 1.86, 1.13),
+    new THREE.Vector3(side * 0.65, 1.25, 1.43),
+  ]);
+  mesh(
+    new THREE.TubeGeometry(tubePath, 21, 0.064, 9, false),
+    milled,
+    [0, 0, 0],
+    handHolds,
+  );
+  const gripPath = new THREE.CatmullRomCurve3(
+    [0.36, 0.44, 0.52, 0.6].map((t) => tubePath.getPoint(t)),
+  );
+  mesh(
+    new THREE.TubeGeometry(gripPath, 12, 0.085, 9, false),
+    gripRubber,
+    [0, 0, 0],
+    handHolds,
+  );
+}
 const numberMap = paintTexture(128, (ctx) => {
-  ctx.fillStyle = "#fff1b0";
+  ctx.fillStyle = "#f4d28b";
   ctx.fillRect(0, 0, 128, 128);
+  ctx.strokeStyle = "#984d30";
+  ctx.lineWidth = 8;
+  ctx.beginPath();
+  ctx.arc(64, 64, 58, 0, 2 * Math.PI);
+  ctx.stroke();
+  ctx.strokeStyle = "#137e64";
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.arc(64, 64, 49, 0, 2 * Math.PI);
+  ctx.stroke();
   ctx.font = "900 86px system-ui";
   ctx.fillStyle = "#184554";
   ctx.textAlign = "center";
@@ -1085,7 +1161,7 @@ for (let x of [-1.42, 1.42])
       const angle = (i * Math.PI) / 3;
       sphere(
         0.046,
-        chassisPaint,
+        hubAccent,
         [Math.sign(x) * 0.225, Math.sin(angle) * 0.2, Math.cos(angle) * 0.2],
         axle,
       );
@@ -1662,26 +1738,20 @@ function updateDrift(dt, turn, brake, offroad, progress) {
     if (next > stage) driftCue(next);
   }
 }
-const motion = new THREE.Vector3();
-const facing = new THREE.Vector3();
+const vehicle = new ArcadeVehicle();
+const motion = vehicle.motion;
 let impactTime = 0;
 let impactLean = 0;
 let landing = 0;
 let slide = 0;
 let throwTime = 0;
+let bananaPending = false;
 let slipAngle = 0;
 let slipTime = 0;
 let thrower = null;
 function clearMotion() {
-  motion.set(0, 0, 0);
-  impactTime =
-    impactLean =
-    landing =
-    slide =
-    throwTime =
-    slipAngle =
-    slipTime =
-      0;
+  vehicle.reset();
+  impactTime = impactLean = landing = slide = slipAngle = slipTime = 0;
 }
 const itemMarkup = {
   banana: "🍌 Banana",
@@ -1697,6 +1767,9 @@ function reset() {
   position.copy(sample(0.015));
   wasOnRamp = false;
   clearMotion();
+  throwTime = 0;
+  bananaPending = false;
+  thrower = null;
   heading = Math.atan2(tangent(0.015).x, tangent(0.015).z);
   velocity = 0;
   y = vy = elapsed = stun = 0;
@@ -1777,9 +1850,26 @@ function closest(p) {
   }
   return { dist: Math.sqrt(best), t: at / N };
 }
+function releaseBanana() {
+  bananaPending = false;
+  const peel = makeBanana();
+  const forward = new THREE.Vector3(Math.sin(heading), 0, Math.cos(heading));
+  peel.position.copy(position).addScaledVector(forward, -2.34 * KART_SCALE);
+  peel.position.y = y + 1.3 * KART_SCALE;
+  peel.rotation.y = heading;
+  scene.add(peel);
+  hazards.push({
+    g: peel,
+    life: 30,
+    lift: 2.1,
+    motion: forward.multiplyScalar(-4.6),
+  });
+  notify("🍌 Banana lançada!");
+}
+
 function useItem() {
   const rider = partner();
-  if (!rider.item || !running || paused || swap > 0) return;
+  if (!rider.item || !running || paused || swap > 0 || bananaPending) return;
   const item = rider.item;
   rider.item = null;
   if (item === "turbo") {
@@ -1787,21 +1877,14 @@ function useItem() {
     velocity = Math.max(velocity + 8, 32);
     notify("", item);
   } else {
-    const g = makeBanana();
-    const f = new THREE.Vector3(Math.sin(heading), 0, Math.cos(heading));
-    g.position.copy(position).addScaledVector(f, -2.34 * KART_SCALE);
-    g.position.y = y + 1.3 * KART_SCALE;
-    g.rotation.y = heading;
-    scene.add(g);
-    hazards.push({ g, life: 30, lift: 2.1, motion: f.multiplyScalar(-4.6) });
     thrower = rider;
     throwTime = 0.48;
-    notify("🍌 Banana lançada!");
+    bananaPending = true;
   }
   updateHUD();
 }
 function swapCrew() {
-  if (swapCooldown > 0 || paused || !running) return;
+  if (swapCooldown > 0 || paused || !running || bananaPending) return;
   swapFrom = pilotDog;
   swap = swapDuration;
   swapCooldown = 1.08;
@@ -1991,6 +2074,47 @@ function updateDust(dt, active) {
 }
 const camTarget = new THREE.Vector3();
 const cameraSide = new THREE.Vector3();
+const cameraDesired = new THREE.Vector3();
+const cameraLook = new THREE.Vector3();
+const cameraForward = new THREE.Vector3();
+let cameraHeading = heading;
+
+function followHeading(heading, slip, dt) {
+  const target = heading + slip * 0.52;
+  const difference = Math.atan2(
+    Math.sin(target - cameraHeading),
+    Math.cos(target - cameraHeading),
+  );
+  cameraHeading = snapCamera
+    ? target
+    : cameraHeading + difference * (1 - Math.exp(-7 * dt));
+  return cameraHeading;
+}
+
+function shortenChase(target, desired, solids) {
+  const dx = desired.x - target.x,
+    dz = desired.z - target.z;
+  const distance = dx * dx + dz * dz;
+  let bound = 1;
+  for (const obstacle of solids) {
+    if (obstacle.height < 2.1) continue;
+    const x = obstacle.x - target.x,
+      z = obstacle.z - target.z;
+    const t = (x * dx + z * dz) / distance;
+    if (
+      t < 0.24 ||
+      t > bound ||
+      target.y + (desired.y - target.y) * t > obstacle.height + 0.25
+    )
+      continue;
+    const radius =
+      (obstacle.radius ?? Math.max(obstacle.halfWidth, obstacle.halfLength)) +
+      0.34;
+    if ((x - dx * t) ** 2 + (z - dz * t) ** 2 < radius ** 2)
+      bound = Math.max(0.24, t - (radius + 0.32) / Math.sqrt(distance));
+  }
+  if (bound < 1) desired.lerp(target, 1 - bound);
+}
 const handGoal = new THREE.Vector3();
 const elbow = new THREE.Vector3();
 const armAxis = new THREE.Vector3();
@@ -2062,13 +2186,15 @@ function tick() {
   requestAnimationFrame(tick);
   const frame = performance.now(),
     frameSeconds = (frame - previousFrame) / 1000,
-    dt = Math.min(frameSeconds, 0.05),
+    visualDt = Math.min(frameSeconds, 0.05),
     now = frame / 1000;
   previousFrame = frame;
   river.material.uniforms.time.value = now;
   let dustActive = false;
-  if (running && !paused) {
-    elapsed += frameSeconds;
+  if (running && !paused) elapsed += frameSeconds;
+  const stepCount = Math.max(1, Math.ceil(visualDt / PHYSICS_STEP - 1e-7));
+  const dt = visualDt / stepCount;
+  for (let step = 0; step < stepCount && running && !paused && dt > 0; step++) {
     let accel = held("KeyW") || held("ArrowUp"),
       brake = held("KeyS") || held("ArrowDown"),
       left = held("KeyA") || held("ArrowLeft"),
@@ -2085,35 +2211,30 @@ function tick() {
       itemBoost > 0 ? 38 : 0,
       driftBoost > 0 ? cruiseSpeed * (1 + tiers[activeTier - 1].power) : 0,
     );
-    if (stun > 0) {
-      stun -= dt;
-      velocity *= Math.max(0, 1 - 3 * dt);
-    } else {
-      const friction = 10 * dt;
-      const groundLimit = surfaceAt(position) === 2 ? 23 : cruiseSpeed;
-      const max = offroad
-        ? 13
-        : Math.max(boostSpeed, drifting ? 21 : groundLimit);
-      velocity += accel
-        ? 22 * dt
-        : brake
-          ? -30 * dt
-          : -Math.sign(velocity) * Math.min(Math.abs(velocity), friction);
-      if (boostSpeed && !brake && !offroad) velocity += 24 * dt;
-      velocity = THREE.MathUtils.clamp(velocity, -9, max);
-    }
-    const yaw = drifting
-      ? driftSide * (turn === driftSide ? 0.89 : turn ? 0.31 : 0.48)
-      : turn * 1.25;
-    heading -=
-      yaw * dt * Math.min(1, Math.abs(velocity) / 9) * Math.sign(velocity || 1);
-    const rate = 1 - Math.exp(-(drifting ? 5.5 : 14) * dt);
-    slide = THREE.MathUtils.lerp(slide, drifting ? driftSide * 0.36 : 0, rate);
-    const travelHeading = heading + slide;
-    facing.set(Math.sin(travelHeading), 0, Math.cos(travelHeading));
-    motion.copy(facing).multiplyScalar(velocity);
+    const surface = offroad
+      ? "grass"
+      : surfaceAt(position) === 2
+        ? "dirt"
+        : "road";
+    const next = vehicle.step(dt, {
+      heading,
+      speed: velocity,
+      turn,
+      throttle: accel,
+      brake,
+      surface,
+      drifting,
+      driftSide,
+      air: y > 0.06,
+      boostedSpeed: boostSpeed,
+      stunned: stun > 0,
+    });
+    heading = next.heading;
+    velocity = next.speed;
+    stun = Math.max(0, stun - dt);
     const impact = moveKart(position, motion, heading, y, dt, solids);
-    if (impact > 0.1) velocity = motion.dot(facing);
+    velocity = vehicle.resolveContact(impact);
+    slide = Math.atan2(vehicle.lateral, Math.max(3, Math.abs(velocity)));
     if (impact > 3 && impactTime < 0.1) {
       impactTime = 0.36;
       impactLean = Math.min(0.25, impact * 0.014);
@@ -2129,12 +2250,16 @@ function tick() {
     vy -= 17 * dt;
     y = Math.max(0, y + vy * dt);
     if (y === 0) {
-      if (vy < -3) landing = Math.min(0.24, -vy * 0.039);
+      if (vy < -3) {
+        landing = Math.min(0.24, -vy * 0.039);
+        vehicle.touchDown(vy);
+      }
       vy = 0;
     }
     impactTime = Math.max(0, impactTime - dt);
     landing *= Math.exp(-9 * dt);
     throwTime = Math.max(0, throwTime - dt);
+    if (bananaPending && throwTime <= 0.3) releaseBanana();
     slipTime = Math.max(0, slipTime - dt);
     slipAngle = slipTime ? (1 - slipTime / 0.72) * Math.PI * 2 : 0;
     for (let p of pickups) {
@@ -2182,6 +2307,7 @@ function tick() {
         stun = 0.8;
         slipTime = 0.72;
         velocity *= 0.3;
+        vehicle.lateral *= 0.42;
         clearBoosts();
         hazard.life = 0;
         notify("🍌 Escorregou!");
@@ -2224,50 +2350,49 @@ function tick() {
       )
         lastCheckpoint = i;
     prevProgress = progress;
-    updateHUD();
   }
+  if (running && !paused) updateHUD();
   if (toastTime > 0) {
-    toastTime -= dt;
+    toastTime -= visualDt;
     if (toastTime <= 0) $("toast").textContent = "";
   }
-  updateDust(dt, dustActive);
+  updateDust(visualDt, dustActive);
   kart.position.set(position.x, y, position.z);
   kart.rotation.y = heading + Math.PI + slipAngle;
-  let turn =
-    Number(!!(held("KeyD") || held("ArrowRight"))) -
-    Number(!!(held("KeyA") || held("ArrowLeft")));
+  const turn = vehicle.steer;
+  const gain = 1 - Math.exp(-11 * visualDt);
+  body.position.y = vehicle.heave;
   body.rotation.z = THREE.MathUtils.lerp(
     body.rotation.z,
-    -turn * Math.min(0.18, Math.abs(velocity) / 110) - slide * 0.16,
-    1 - Math.exp(-8 * dt),
+    vehicle.roll - slide * 0.13,
+    gain,
   );
   body.rotation.x = THREE.MathUtils.lerp(
     body.rotation.x,
-    (boosting() ? 0.1 : 0) +
-      vy * 0.033 -
-      landing * 0.9 -
-      impactLean * impactTime,
-    1 - Math.exp(-11 * dt),
+    vehicle.pitch + vy * 0.027 - impactLean * impactTime,
+    gain,
   );
-  for (let w of wheels) {
-    if (running && !paused)
-      w.axle.rotation.x += (velocity * dt) / (0.55 * KART_SCALE);
-    w.pivot.rotation.y = w.front ? -turn * 0.4 : 0;
+  for (const w of wheels) {
+    if (running && !paused) {
+      const wheelSpeed =
+        velocity + w.side * turn * Math.min(4, Math.abs(velocity) * 0.14);
+      w.axle.rotation.x += (wheelSpeed * visualDt) / (0.55 * KART_SCALE);
+    }
+    w.pivot.rotation.y = w.front ? -turn * (0.39 + w.side * turn * 0.05) : 0;
+    const transfer =
+      body.rotation.x * (w.front ? -0.29 : 0.29) -
+      body.rotation.z * w.side * 0.44;
     const suspension =
-      0.605 +
-      landing * 0.34 -
-      body.rotation.z * w.side * 0.43 -
-      Math.min(y, 0.6) * 0.09 +
-      (w.front ? vy * 0.007 : -vy * 0.005);
+      0.605 - vehicle.heave + transfer - Math.min(y, 0.6) * 0.09;
     w.spring.scale.y = THREE.MathUtils.clamp(
-      1 - (suspension - 0.605) * 1.6,
-      0.69,
-      1.24,
+      1 - (suspension - 0.605) * 1.75,
+      0.65,
+      1.27,
     );
     w.pivot.position.y = THREE.MathUtils.lerp(
       w.pivot.position.y,
       suspension,
-      1 - Math.exp(-19 * dt),
+      gain,
     );
   }
   wheelFace.rotation.z = -turn * 0.38;
@@ -2361,6 +2486,17 @@ function tick() {
           0.59 + jump * 0.61 - Math.abs(slide) * 0.28 + impactTime * 0.3,
           -0.4 + Math.abs(slide) * 0.76,
         );
+        if (swap <= 0) {
+          const brace = THREE.MathUtils.clamp(
+            Math.abs(slide) * 3.4 + impactTime * 0.7,
+            0,
+            1,
+          );
+          elbow.set(side * 0.685, 1.87, 0.91);
+          body.localToWorld(elbow);
+          m.root.worldToLocal(elbow);
+          handGoal.lerp(elbow, brace * (1 - throwing));
+        }
         handGoal.x += side * throwing * 0.34;
         handGoal.y += throwing * 0.54;
         handGoal.z += throwing * 0.66;
@@ -2374,30 +2510,44 @@ function tick() {
     }
   }
   tailLamp.emissiveIntensity = held("KeyS") || held("ArrowDown") ? 1.45 : 0.45;
-  let forward = new THREE.Vector3(Math.sin(heading), 0, Math.cos(heading));
-  let desired = kart.position
-    .clone()
-    .addScaledVector(forward, -8.8 - (boosting() ? 1.85 : 0))
-    .addScaledVector(
-      cameraSide.set(-forward.z, 0, forward.x),
-      1.05 + slide * 1.1,
-    )
-    .add(new THREE.Vector3(0, 5.65 + y * 0.2, 0));
-  camera.position.lerp(desired, snapCamera ? 1 : 1 - Math.exp(-7 * dt));
-  snapCamera = false;
+  const lookAhead = followHeading(heading, slide, visualDt);
+  const forward = cameraForward.set(
+    Math.sin(lookAhead),
+    0,
+    Math.cos(lookAhead),
+  );
+  const speedFraction = THREE.MathUtils.clamp(Math.abs(velocity) / 38, 0, 1);
+  const height = 4.95 + speedFraction * 0.47;
+  const chaseDistance = 8.1 + speedFraction * 1.08 + (boosting() ? 1.27 : 0);
   camTarget
     .copy(kart.position)
-    .add(new THREE.Vector3(0, 2.2 * KART_SCALE, 0))
-    .addScaledVector(forward, 4);
-  camera.lookAt(camTarget);
-  camera.fov = THREE.MathUtils.lerp(camera.fov, boosting() ? 76 : 68, 0.06);
+    .addScaledVector(forward, 2.2 + speedFraction * 2.5);
+  camTarget.y += 1.62 + speedFraction * 0.2 - y * 0.2;
+  cameraDesired.copy(kart.position).addScaledVector(forward, -chaseDistance);
+  cameraDesired.addScaledVector(
+    cameraSide.set(-forward.z, 0, forward.x),
+    0.93 + slide * 0.62,
+  );
+  cameraDesired.y = height + y * 0.58;
+  shortenChase(camTarget, cameraDesired, solids);
+  const cameraGain = snapCamera ? 1 : 1 - Math.exp(-8.3 * visualDt);
+  camera.position.lerp(cameraDesired, cameraGain);
+  cameraLook.lerp(camTarget, snapCamera ? 1 : 1 - Math.exp(-10 * visualDt));
+  snapCamera = false;
+  camera.lookAt(cameraLook);
+  camera.fov = THREE.MathUtils.damp(
+    camera.fov,
+    66 + 5 * speedFraction + (boosting() ? 5 : 0),
+    5.5,
+    visualDt,
+  );
   const visualBoost = boosting() && !paused && $("particles").checked;
   const intensity = visualBoost
     ? itemBoost > 0
       ? 0.42
       : tiers[activeTier - 1].power
     : 0;
-  updateStreaks(intensity, dt, now);
+  updateStreaks(intensity, visualDt, now);
   const glowColor =
     itemBoost > 0 ? 0x54d7ff : tiers[Math.max(0, activeTier - 1)].color;
   for (const glow of exhaustGlows) {
@@ -2405,7 +2555,7 @@ function tick() {
     glow.material.opacity = THREE.MathUtils.lerp(
       glow.material.opacity,
       boosting() ? 0.85 : 0,
-      1 - Math.exp(-15 * dt),
+      1 - Math.exp(-15 * visualDt),
     );
     glow.scale.setScalar(1 + 0.17 * Math.sin(now * 46));
   }

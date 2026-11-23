@@ -1,4 +1,4 @@
-# Vira-Lata Racing 0.5.2
+# Vira-Lata Racing 0.6
 
 Use Node.js 24. No terminal, abra a pasta extraída e execute:
 
@@ -27,6 +27,8 @@ Cada personagem leva um item. A caixa de interrogação abastece primeiro o parc
 Na Volta do Ribeirão, a curva longa do lado direito permite carregar os três níveis de drift. As faíscas mudam de amarelo para azul e vermelho. Solte Espaço para liberar o mini-turbo. Cada nível eleva o limite de velocidade em 15%, 25% ou 40% por 0,8 s, 1,5 s ou 2,5 s, respectivamente. Use o raio amarelo do inventário para ativar o turbo de item.
 
 ## Build e Vercel
+
+Execute `npm test` para verificar a aceleração, marcha à ré, aderência, turbo, colisões e compressão da suspensão.
 
 Execute `npm run build` para gerar `dist/` e `npm run preview` para testar o build por HTTP. O ZIP já inclui o build verificado.
 
