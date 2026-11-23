@@ -1,9 +1,13 @@
 import * as THREE from "three";
+import { createGraphicsQuality } from "./graphics-quality.js";
 import { createMobileControls } from "./mobile-controls.js";
 import { ArcadeVehicle, PHYSICS_STEP } from "./vehicle.js";
 import {
   centerline,
   COURSE_SCALE,
+  ROAD_WIDTH,
+  START_PROGRESS,
+  startingGrid,
   channelDistance,
   createRiver,
   surfaceAt,
@@ -63,9 +67,10 @@ const context = canvas.getContext("webgl2", { antialias: true, alpha: false });
 if (!context) throw new Error("WebGL 2 indisponível");
 const renderer = new THREE.WebGLRenderer({ canvas, context });
 renderer.setSize(innerWidth, innerHeight);
-renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+const coarsePointer = matchMedia("(any-pointer: coarse)");
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFShadowMap;
+renderer.shadowMap.autoUpdate = false;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.06;
@@ -91,6 +96,29 @@ sun.shadow.camera.right = 51;
 sun.shadow.camera.top = 51;
 sun.shadow.camera.bottom = -51;
 scene.add(sun, sun.target);
+let shadowTime = 0;
+function applyGraphics(preset) {
+  scene.environmentIntensity = preset.light;
+  const shadowSize = Math.min(
+    renderer.capabilities.maxTextureSize,
+    preset.shadow,
+  );
+  renderer.setPixelRatio(Math.min(devicePixelRatio, preset.ratio));
+  if (sun.shadow.mapSize.x !== shadowSize) {
+    if (sun.shadow.map) {
+      sun.shadow.map.dispose();
+      sun.shadow.map = null;
+    }
+    if (shadowSize > 0) sun.shadow.mapSize.setScalar(shadowSize);
+  }
+  renderer.shadowMap.enabled = shadowSize > 0 && $("shadows").checked;
+  renderer.shadowMap.needsUpdate = renderer.shadowMap.enabled;
+  shadowTime = 0;
+}
+const quality = createGraphicsQuality($("quality"), {
+  mobile: coarsePointer.matches,
+  apply: applyGraphics,
+});
 const models = await loadModels();
 const solids = [];
 const mat = (c, r = 0.8, m = 0) =>
@@ -189,7 +217,7 @@ terrain.receiveShadow = true;
 scene.add(terrain);
 const river = createRiver();
 scene.add(river);
-const N = 500;
+const N = 900;
 const track = centerline.getSpacedPoints(N).slice(0, N);
 function sample(t) {
   let f = (((t % 1) + 1) % 1) * N,
@@ -202,8 +230,9 @@ function tangent(t) {
     .sub(sample(t - 0.001))
     .normalize();
 }
-const width = 13.2 * COURSE_SCALE;
-const shoulderWidth = 1.35;
+const width = ROAD_WIDTH;
+const grid = startingGrid();
+const shoulderWidth = 1.65;
 function ribbon(offset, material, y = 0) {
   let v = [],
     uv = [],
@@ -345,7 +374,7 @@ function railPoint(t, side) {
     (width / 2 + shoulderWidth) * side,
   );
 }
-const railSegments = Math.round(172 * COURSE_SCALE);
+const railSegments = Math.round(138 * COURSE_SCALE);
 function makeCurbs() {
   const vertices = [];
   const indices = [];
@@ -459,6 +488,37 @@ for (let j = 0; j < 1; j++) {
     tile.rotation.y = Math.atan2(d.x, d.z);
   }
 }
+const gridPaint = paintTexture(128, (ctx, size) => {
+  ctx.clearRect(0, 0, size, size);
+  ctx.strokeStyle = "#fff3dce6";
+  ctx.lineWidth = 5;
+  ctx.lineJoin = "round";
+  ctx.beginPath();
+  ctx.moveTo(13, 28);
+  ctx.lineTo(13, 14);
+  ctx.lineTo(115, 14);
+  ctx.lineTo(115, 28);
+  ctx.moveTo(13, 96);
+  ctx.lineTo(13, 112);
+  ctx.lineTo(115, 112);
+  ctx.lineTo(115, 96);
+  ctx.stroke();
+});
+const gridMaterial = new THREE.MeshBasicMaterial({
+  map: gridPaint,
+  transparent: true,
+  depthWrite: false,
+});
+const gridGeometry = new THREE.PlaneGeometry(3.8, 4.45);
+for (const slot of grid) {
+  const p = sample(slot.progress),
+    d = tangent(slot.progress);
+  p.addScaledVector(new THREE.Vector3(-d.z, 0, d.x), slot.offset);
+  const mark = mesh(gridGeometry, gridMaterial, [p.x, 0.048, p.z]);
+  mark.rotation.order = "YXZ";
+  mark.rotation.set(-Math.PI / 2, Math.atan2(d.x, d.z), 0);
+  mark.castShadow = false;
+}
 // Forest vegetation and distant hills are placed outside the racing line.
 let seed = 1337;
 function rnd() {
@@ -467,6 +527,7 @@ function rnd() {
 }
 const canopyShape = new THREE.SphereGeometry(1, 18, 12);
 const placements = new Map();
+const vegetationLods = [];
 function plant(name, x, y, z, scale = 1) {
   const matrix = new THREE.Matrix4().compose(
     new THREE.Vector3(x, y, z),
@@ -520,16 +581,80 @@ function placeVegetation() {
         }),
       );
     }
+    const detailed = [];
     for (const [material, combined] of prototypes.get(name)) {
       const mesh = new THREE.InstancedMesh(combined, material, matrices.length);
       matrices.forEach((matrix, i) => mesh.setMatrixAt(i, matrix));
       mesh.castShadow = name.startsWith("Tree");
       mesh.receiveShadow = true;
       scene.add(mesh);
+      detailed.push(mesh);
+    }
+    if (name.startsWith("Tree")) {
+      const remote = makeTreeLod(matrices);
+      vegetationLods.push({
+        remote,
+        detailed,
+        center: new THREE.Vector3().setFromMatrixPosition(matrices[0]),
+      });
+    } else {
+      vegetationLods.push({
+        detailed,
+        center: new THREE.Vector3().setFromMatrixPosition(matrices[0]),
+      });
     }
   }
 }
-for (let i = 0; i < 242; i++) {
+const distantCanopy = new THREE.IcosahedronGeometry(1, 1);
+const distantTrunk = new THREE.CylinderGeometry(0.23, 0.37, 2.75, 6);
+const distantLeaf = mat(0x588c56);
+const distantBark = mat(0x986248);
+const lodPoint = new THREE.Matrix4();
+const lodScale = new THREE.Vector3();
+const lodRotation = new THREE.Quaternion();
+function makeTreeLod(matrices) {
+  const canopies = new THREE.InstancedMesh(
+    distantCanopy,
+    distantLeaf,
+    matrices.length * 3,
+  );
+  const trunks = new THREE.InstancedMesh(
+    distantTrunk,
+    distantBark,
+    matrices.length,
+  );
+  matrices.forEach((matrix, i) => {
+    lodPoint.makeTranslation(0, 1.37, 0).premultiply(matrix);
+    trunks.setMatrixAt(i, lodPoint);
+    for (let j = 0; j < 3; j++) {
+      const location = new THREE.Vector3(
+        (j - 1) * 1.05,
+        3.43 + (j % 2) * 0.46,
+        (j % 2) * 0.46,
+      );
+      lodPoint
+        .compose(location, lodRotation, lodScale.set(1.63, 1.27, 1.33))
+        .premultiply(matrix);
+      canopies.setMatrixAt(i * 3 + j, lodPoint);
+    }
+  });
+  scene.add(trunks, canopies);
+  return [trunks, canopies];
+}
+let nextLOD = 0;
+function updateVegetation(now) {
+  if (now < nextLOD) return;
+  nextLOD = now + 0.27;
+  const detail = quality.current.detail;
+  for (const { detailed, remote, center } of vegetationLods) {
+    const near =
+      camera.position.distanceToSquared(center) <
+      (detail + (remote ? 17 : 0)) ** 2;
+    for (const mesh of detailed) mesh.visible = near;
+    if (remote) for (const mesh of remote) mesh.visible = !near;
+  }
+}
+for (let i = 0; i < 280; i++) {
   const originalX = (rnd() - 0.5) * 176;
   const originalZ = (rnd() - 0.5) * 146;
   const x = originalX * COURSE_SCALE,
@@ -870,6 +995,8 @@ function batchScenery() {
       object.material.id,
       object.castShadow,
       object.receiveShadow,
+      Math.floor(object.matrixWorld.elements[12] / 45),
+      Math.floor(object.matrixWorld.elements[14] / 45),
     ].join("/");
     if (!batches.has(key)) batches.set(key, []);
     batches.get(key).push(object);
@@ -1050,7 +1177,7 @@ let keys = {},
   paused = true,
   velocity = 0,
   heading = 0,
-  position = sample(0.015),
+  position = sample(START_PROGRESS),
   y = 0,
   vy = 0,
   drift = 0,
@@ -1059,11 +1186,11 @@ let keys = {},
   activeTier = 0,
   lap = 1,
   elapsed = 0,
-  prevProgress = 0.015,
+  prevProgress = START_PROGRESS,
   lastCheckpoint = 0,
   stun = 0,
   toastTime = 0;
-heading = Math.atan2(tangent(0.015).x, tangent(0.015).z);
+heading = Math.atan2(tangent(START_PROGRESS).x, tangent(START_PROGRESS).z);
 const itemTypes = ["banana", "turbo"];
 const cruiseSpeed = 27;
 const tiers = [
@@ -1175,8 +1302,13 @@ function updateDrift(dt, turn, brake, offroad) {
 
   const stage = chargedTier();
   const pace = THREE.MathUtils.clamp(velocity / 22, 0.65, 1.2);
-  const steeringEffort = turn === driftSide ? 1 : turn === -driftSide ? 0.74 : 0.38;
-  const slipEffort = THREE.MathUtils.clamp(Math.abs(vehicle.lateral) / 5, 0, 0.22);
+  const steeringEffort =
+    turn === driftSide ? 1 : turn === -driftSide ? 0.74 : 0.38;
+  const slipEffort = THREE.MathUtils.clamp(
+    Math.abs(vehicle.lateral) / 5,
+    0,
+    0.22,
+  );
   drift = Math.min(1.6, drift + dt * pace * (steeringEffort + slipEffort));
   const next = chargedTier();
   if (next > stage) driftCue(next);
@@ -1207,18 +1339,18 @@ function notify(message, selectedItem) {
   toastTime = 1.5;
 }
 function reset() {
-  position.copy(sample(0.015));
+  position.copy(sample(START_PROGRESS));
   wasOnRamp = false;
   clearMotion();
   throwTime = 0;
   bananaPending = false;
   thrower = null;
-  heading = Math.atan2(tangent(0.015).x, tangent(0.015).z);
+  heading = Math.atan2(tangent(START_PROGRESS).x, tangent(START_PROGRESS).z);
   velocity = 0;
   y = vy = elapsed = stun = 0;
   clearBoosts();
   lap = 1;
-  prevProgress = 0.015;
+  prevProgress = START_PROGRESS;
   lastCheckpoint = 0;
   dog.item = cat.item = null;
   pilotDog = true;
@@ -1236,56 +1368,85 @@ function reset() {
   hazards.length = 0;
   updateHUD();
 }
+const hud = {
+  speed: $("speed"),
+  lap: $("lap"),
+  time: $("time"),
+  pilot: $("pilot"),
+  partner: $("partner"),
+  slots: [
+    [$("dog-item"), dog],
+    [$("cat-item"), cat],
+  ],
+  swap: $("swap-pilot"),
+  drift: $("drift-meter"),
+  item: $("equipped-item"),
+};
+let displayedSpeed = -1;
+let equipped;
+function renderText(element, value) {
+  if (element.textContent !== value) element.textContent = value;
+}
 function updateHUD() {
-  $("speed").innerHTML =
-    `${Math.round(Math.abs(velocity) * 3.6)} <small>KM/H</small>`;
-  $("lap").textContent = `VOLTA ${Math.min(lap, 3)}/3`;
-  $("time").textContent =
-    `${String(Math.floor(elapsed / 60)).padStart(2, "0")}:${String(Math.floor(elapsed % 60)).padStart(2, "0")}.${Math.floor(elapsed * 10) % 10}`;
-  $("pilot").textContent = pilotDog
-    ? "🐕 Piloto: Caramelo"
-    : "🐈‍⬛ Piloto: Gato Preto";
-  $("partner").textContent = pilotDog
-    ? "🐈‍⬛ Parceiro: Gato Preto"
-    : "🐕 Parceiro: Caramelo";
-  for (const [mascot, id] of [
-    [dog, "dog-item"],
-    [cat, "cat-item"],
-  ]) {
-    const slot = $(id);
-    const item = mascot.item;
-    if (slot.dataset.item !== (item ?? "")) {
-      slot.dataset.item = item ?? "";
-      slot.querySelector("strong").innerHTML = item
-        ? itemMarkup[item]
-        : "Sem item";
+  const speed = Math.round(Math.abs(velocity) * 3.6);
+  if (speed !== displayedSpeed) {
+    hud.speed.firstChild.nodeValue = speed + " ";
+    displayedSpeed = speed;
+  }
+  renderText(hud.lap, "VOLTA " + Math.min(lap, 3) + "/3");
+  renderText(
+    hud.time,
+    String(Math.floor(elapsed / 60)).padStart(2, "0") +
+      ":" +
+      String(Math.floor(elapsed % 60)).padStart(2, "0") +
+      "." +
+      (Math.floor(elapsed * 10) % 10),
+  );
+  if (paused) {
+    renderText(
+      hud.pilot,
+      pilotDog ? "🐕 Piloto: Caramelo" : "🐈‍⬛ Piloto: Gato Preto",
+    );
+    renderText(
+      hud.partner,
+      pilotDog ? "🐈‍⬛ Parceiro: Gato Preto" : "🐕 Parceiro: Caramelo",
+    );
+    for (const [slot, mascot] of hud.slots) {
+      const item = mascot.item;
+      if (slot.dataset.item !== (item ?? "")) {
+        slot.dataset.item = item ?? "";
+        slot.querySelector("strong").innerHTML = item
+          ? itemMarkup[item]
+          : "Sem item";
+      }
+      slot.classList.toggle("available", mascot === partner() && swap <= 0);
     }
-    const usable = mascot === partner() && swap <= 0;
-    slot.classList.toggle("available", usable);
-    slot.setAttribute("aria-current", usable ? "true" : "false");
   }
-  $("swap-pilot").disabled = swapCooldown > 0;
-  $("swap-pilot").classList.toggle("swapping", swap > 0);
-  $("drift-meter").value = drift;
+  hud.swap.disabled = swapCooldown > 0;
+  hud.swap.classList.toggle("swapping", swap > 0);
   const tier = chargedTier();
-  $("drift-meter").parentElement.dataset.tier = tier;
-  mobile.update({
-    tier,
-    activeDrift: driftSide !== 0,
-    item: swap <= 0 && !bananaPending ? partner().item : null,
-  });
-  const boostIndicator = $("boost");
-  const boostState =
-    itemBoost > 0 ? "item" : driftBoost > 0 ? String(activeTier) : "idle";
-  if (boostIndicator.dataset.state !== boostState) {
-    boostIndicator.dataset.state = boostState;
-    boostIndicator.innerHTML =
-      itemBoost > 0
-        ? turboIcon + " Turbo ativo"
-        : driftBoost > 0
-          ? tiers[activeTier - 1].label + " ativo"
-          : "Boost inativo";
+  const activeDrift = driftSide !== 0;
+  hud.drift.parentElement.hidden = !activeDrift;
+  if (activeDrift) {
+    hud.drift.value = drift;
+    hud.drift.dataset.tier = tier;
   }
+  const item = swap <= 0 && !bananaPending ? partner().item : null;
+  if (equipped !== item) {
+    equipped = item;
+    hud.item.hidden = !item;
+    hud.item.innerHTML =
+      item === "turbo" ? turboIcon : item === "banana" ? "🍌" : "";
+    hud.item.setAttribute(
+      "aria-label",
+      item === "turbo"
+        ? "Turbo equipado"
+        : item === "banana"
+          ? "Banana equipada"
+          : "",
+    );
+  }
+  mobile.update({ tier, activeDrift, item, charge: drift });
 }
 function closest(p) {
   let best = 1e9,
@@ -1370,6 +1531,8 @@ function setPaused(value) {
   paused = value;
   clearControls();
   cancelDrift();
+  quality.resetTiming();
+  updateHUD();
   $("app").classList.toggle("driving", running && !paused);
   $("menu").hidden = !paused;
   $("play").textContent =
@@ -1425,7 +1588,7 @@ document.addEventListener("visibilitychange", () => {
 });
 for (const button of document.querySelectorAll("[data-action]")) {
   const action = actions[button.dataset.action];
-  if (button.closest("#touch")) {
+  if (button.closest("#touch") || button.hasAttribute("data-touch-action")) {
     button.addEventListener("pointerdown", (event) => {
       if (event.button !== 0 || button.disabled || !running || paused) return;
       event.preventDefault();
@@ -1455,7 +1618,7 @@ $("reset").onclick = () => {
   setPaused(false);
   $("reset").blur();
 };
-$("shadows").onchange = (e) => (renderer.shadowMap.enabled = e.target.checked);
+$("shadows").onchange = () => applyGraphics(quality.current);
 const dirtMaterial = mat(0xccb18c);
 const smokeMaterial = mat(0xb4c9d1);
 const impactMaterial = new THREE.MeshBasicMaterial({ color: 0xffe5a0 });
@@ -1463,8 +1626,9 @@ const sparkMaterials = tiers.map(
   ({ color }) => new THREE.MeshBasicMaterial({ color }),
 );
 const flameMaterial = new THREE.MeshBasicMaterial({ color: 0x63faff });
+const dustGeometry = new THREE.SphereGeometry(0.23, 12, 8);
 const dust = Array.from({ length: 32 }, () => {
-  const puff = sphere(0.23, dirtMaterial, [0, 0, 0]);
+  const puff = mesh(dustGeometry, dirtMaterial, [0, 0, 0]);
   puff.castShadow = puff.receiveShadow = puff.visible = false;
   return {
     puff,
@@ -1478,10 +1642,13 @@ let dustIndex = 0,
   dustDelay = 0;
 function updateDust(dt, active) {
   dustDelay -= dt;
+  const { particles, emission } = quality.current;
+  const showParticles = $("particles").checked;
+  dustIndex %= particles;
   if (
     (active || boosting() || impactTime > 0.19) &&
     dustDelay <= 0 &&
-    $("particles").checked
+    showParticles
   ) {
     const particle = dust[dustIndex];
     const { puff } = particle;
@@ -1515,12 +1682,13 @@ function updateDust(dt, active) {
     puff.position.x += Math.cos(heading) * spread;
     puff.position.z -= Math.sin(heading) * spread;
     puff.position.y = y + (boosting() ? 0.54 : 0.25) * KART_SCALE;
-    dustIndex = (dustIndex + 1) % dust.length;
-    dustDelay = 0.035;
+    dustIndex = (dustIndex + 1) % particles;
+    dustDelay = emission;
   }
-  for (const particle of dust) {
+  for (let i = 0; i < dust.length; i++) {
+    const particle = dust[i];
     particle.life = Math.max(0, particle.life - dt);
-    particle.puff.visible = particle.life > 0 && $("particles").checked;
+    particle.puff.visible = particle.life > 0 && showParticles && i < particles;
     if (particle.life <= 0) continue;
     particle.puff.position.addScaledVector(particle.velocity, dt);
     const remaining = particle.life / particle.duration;
@@ -1653,6 +1821,8 @@ function tick() {
     visualDt = Math.min(frameSeconds, 0.05),
     now = frame / 1000;
   previousFrame = frame;
+  if (document.hidden) return;
+  if (running && !paused) quality.sample(frameSeconds);
   river.material.uniforms.time.value = now;
   let dustActive = false;
   if (running && !paused) elapsed += frameSeconds;
@@ -1823,14 +1993,16 @@ function tick() {
   }
   updateDust(visualDt, dustActive);
   kart.position.set(position.x, y, position.z);
-  if (renderer.shadowMap.enabled) {
+  if (renderer.shadowMap.enabled && (snapCamera || now >= shadowTime)) {
+    shadowTime = now + quality.current.interval;
+    renderer.shadowMap.needsUpdate = true;
     sun.target.position.set(position.x, 0, position.z);
     sun.position.copy(sun.target.position).add(sunOffset);
   }
   contactShade.position.set(position.x, 0.039, position.z);
   contactShade.rotation.z = heading;
   contactShade.material.opacity = 0.34 * Math.exp(-3 * y);
-  contactShade.visible = renderer.shadowMap.enabled;
+  contactShade.visible = $("shadows").checked;
   kart.rotation.y = heading + Math.PI + slipAngle;
   const turn = vehicle.steer;
   const gain = 1 - Math.exp(-11 * visualDt);
@@ -1997,11 +2169,18 @@ function tick() {
     Math.cos(lookAhead),
   );
   const speedFraction = THREE.MathUtils.clamp(Math.abs(velocity) / 38, 0, 1);
-  const height = 4.95 + speedFraction * 0.47;
-  const chaseDistance = 8.1 + speedFraction * 1.08 + (boosting() ? 1.27 : 0);
+  const mobileView = coarsePointer.matches;
+  const portrait = camera.aspect < 1;
+  const height =
+    (mobileView ? 6.3 : 5.15) + (portrait ? 0.42 : 0) + speedFraction * 0.47;
+  const chaseDistance =
+    (mobileView ? 10.25 : 8.85) +
+    (portrait ? 0.93 : 0) +
+    speedFraction * 1.08 +
+    (boosting() ? 1.27 : 0);
   camTarget
     .copy(kart.position)
-    .addScaledVector(forward, 2.2 + speedFraction * 2.5);
+    .addScaledVector(forward, (mobileView ? 4.3 : 3.2) + speedFraction * 2.8);
   camTarget.y += 1.62 + speedFraction * 0.2 - y * 0.2;
   cameraDesired.copy(kart.position).addScaledVector(forward, -chaseDistance);
   cameraDesired.addScaledVector(
@@ -2017,7 +2196,9 @@ function tick() {
   camera.lookAt(cameraLook);
   camera.fov = THREE.MathUtils.damp(
     camera.fov,
-    66 + 5 * speedFraction + (boosting() ? 5 : 0),
+    (portrait ? 61 : mobileView ? 70 : 66) +
+      5 * speedFraction +
+      (boosting() ? 5 : 0),
     5.5,
     visualDt,
   );
@@ -2050,6 +2231,7 @@ function tick() {
     halo.visible = halo.material.opacity > 0.013;
   }
   camera.updateProjectionMatrix();
+  updateVegetation(now);
   renderer.render(scene, camera);
 }
 tick();

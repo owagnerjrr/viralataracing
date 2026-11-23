@@ -13,39 +13,42 @@
   <body>
     <div id="app">
       <div id="hud">
-        <div class="hud-top">
-          <div class="brand">VIRA-LATA <b>Racing</b></div>
-          <div class="stats">
-            <span id="lap">VOLTA 1/3</span><span id="time">00:00.0</span>
-            <span id="speed">0 <small>KM/H</small></span>
-          </div>
+        <div class="stats">
+          <span id="race-position" title="Posição · corrida solo">1º</span>
+          <span id="lap">VOLTA 1/3</span>
+          <span id="time">00:00.0</span>
+          <span id="speed">0 <small>KM/H</small></span>
+          <span id="equipped-item" hidden></span>
         </div>
-        <div class="race-panel">
-          <div class="crew">
-            <span id="pilot">🐕 Piloto: Caramelo</span>
-            <span id="partner">🐈‍⬛ Parceiro: Gato Preto</span>
-          </div>
-          <div class="inventory">
-            <div class="slot" id="dog-item">
-              <small>Caramelo</small><strong>Sem item</strong>
-            </div>
-            <div class="slot" id="cat-item">
-              <small>Gato Preto</small><strong>Sem item</strong>
-            </div>
-          </div>
-          <div class="drift-row">
-            <label for="drift-meter"
-              >Drift <progress id="drift-meter" value="0" max="1.34"></progress
-            ></label>
-            <span id="boost">Boost inativo</span>
-          </div>
-          <div class="race-actions">
-            <button id="swap-pilot" data-action="swap">
-              <span aria-hidden="true">⇄</span> Trocar piloto
-            </button>
-            <button data-action="restart">Reiniciar</button>
-          </div>
+        <div class="hud-actions">
+          <button
+            id="swap-pilot"
+            data-touch-action
+            data-action="swap"
+            aria-label="Trocar piloto"
+            title="Trocar piloto"
+          >
+            ⇄
+          </button>
+          <button
+            id="pause-pilot"
+            data-touch-action
+            data-action="pause"
+            aria-label="Pausar corrida"
+            title="Pausar"
+          >
+            Ⅱ
+          </button>
         </div>
+      </div>
+      <div id="portrait-hint">Gire para jogar em paisagem</div>
+      <div class="drift-row desktop-drift" hidden>
+        <progress
+          id="drift-meter"
+          aria-label="Carga de drift"
+          value="0"
+          max="1.34"
+        ></progress>
       </div>
       <div id="help">
         WASD / SETAS: dirigir · ESPAÇO: derrapar · SHIFT: trocar · E: item · R:
@@ -85,6 +88,12 @@
           </button>
           <button class="touch-drift" data-key="Space" aria-label="Drift">
             <span>Drift</span>
+            <progress
+              id="mobile-drift-meter"
+              aria-label="Carga de drift"
+              value="0"
+              max="1.34"
+            ></progress>
           </button>
           <button
             class="touch-brake"
@@ -109,7 +118,6 @@
           <button data-action="recover" aria-label="Reposicionar kart">
             ↶
           </button>
-          <button data-action="pause" aria-label="Pausar corrida">Ⅱ</button>
         </div>
       </div>
       <div id="menu">
@@ -121,7 +129,30 @@
         </p>
         <button id="play" disabled>COMEÇAR CORRIDA</button
         ><button id="reset" disabled>REINICIAR</button>
+        <div class="pause-crew" aria-label="Tripulação">
+          <div>
+            <span id="pilot">🐕 Piloto: Caramelo</span
+            ><span id="partner">🐈‍⬛ Parceiro: Gato Preto</span>
+          </div>
+          <div class="inventory">
+            <div class="slot" id="dog-item">
+              <small>Caramelo</small><strong>Sem item</strong>
+            </div>
+            <div class="slot" id="cat-item">
+              <small>Gato Preto</small><strong>Sem item</strong>
+            </div>
+          </div>
+        </div>
         <div class="settings">
+          <label
+            >Gráficos
+            <select id="quality">
+              <option value="auto">Automático</option>
+              <option value="low">Baixo</option>
+              <option value="medium">Médio</option>
+              <option value="high">Alto</option>
+            </select>
+          </label>
           <label><input type="checkbox" id="shadows" checked /> Sombras</label
           ><label
             ><input type="checkbox" id="particles" checked /> Partículas</label

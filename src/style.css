@@ -19,79 +19,113 @@ canvas {
 }
 #hud {
   position: absolute;
-  inset: 0 0 auto;
   z-index: 3;
-  color: #fff5e0;
+  inset: 0 0 auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 5px;
+  padding: max(8px, env(safe-area-inset-top))
+    max(8px, env(safe-area-inset-right)) 0 max(8px, env(safe-area-inset-left));
+  color: #fff6ea;
   pointer-events: none;
-  display: grid;
-  grid-template-columns: minmax(200px, 1fr) auto;
-  align-items: start;
-  gap: 14px;
-  padding: 16px;
-}
-.hud-top {
-  display: grid;
-  justify-items: start;
-  gap: 10px;
-}
-.brand {
-  font-size: clamp(16px, 2.45vw, 30px);
-  font-weight: 950;
-  font-style: italic;
-  line-height: 1;
-  text-shadow: 0 2px 5px #1e3141;
-}
-.brand b {
-  color: #ffdb70;
 }
 .stats,
-.crew,
-.inventory,
-.race-actions,
-.drift-row {
+.hud-actions,
+.inventory {
   display: flex;
-  gap: 6px;
   align-items: center;
+  gap: 4px;
 }
-.stats span,
-.race-panel {
-  background: #101e2fed;
-  border: 1px solid #b8d5df60;
-  border-radius: 12px;
-  box-shadow: 0 4px 12px #1c2b3838;
+.stats {
+  min-width: 0;
+  flex-wrap: wrap;
 }
 .stats span {
-  padding: 7px 10px;
-  font-weight: 800;
-  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: #152638c9;
+  border: 1px solid #d2eff258;
+  border-radius: 8px;
+  padding: 6px 8px;
+  color: #fff8ed;
+  font:
+    800 12px/1.15 system-ui,
+    sans-serif;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.stats [hidden] {
+  display: none;
 }
 #speed {
-  font-size: 16px;
-  font-variant-numeric: tabular-nums;
+  font-size: 14px;
 }
 #speed small {
-  font-size: 9px;
+  font-size: 8px;
 }
-.race-panel {
+#race-position {
+  color: #ffd560;
+}
+#hud svg,
+#toast svg {
+  width: 20px;
+  height: 16px;
+  vertical-align: middle;
+}
+.hud-actions {
+  display: none;
+}
+.driving .hud-actions {
+  display: flex;
+}
+.hud-actions button {
+  pointer-events: auto;
+  touch-action: none;
   display: grid;
-  gap: 7px;
-  padding: 9px;
-  font-size: 12px;
+  place-items: center;
+  width: 37px;
+  height: 37px;
+  padding: 0;
+  border: 1px solid #d2eff275;
+  border-radius: 10px;
+  background: #18334ad4;
+  color: #fff9de;
+  font-size: 21px;
 }
-.crew {
-  justify-content: space-between;
-  gap: 14px;
-  font-weight: 750;
+.hud-actions button:active {
+  background: #365a72;
 }
-.inventory > *,
-.race-actions > * {
+.hud-actions button:disabled {
+  opacity: 0.44;
+}
+.hud-actions .swapping {
+  color: #ffd560;
+}
+#portrait-hint {
+  display: none;
+}
+.pause-crew {
+  display: grid;
+  gap: 4px;
+  width: min(100%, 310px);
+  font-size: 11px;
+}
+.pause-crew > div:first-child {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.inventory > * {
   flex: 1;
 }
 .slot {
   background: #28394a;
   border: 1px solid #577083;
   border-radius: 7px;
-  padding: 5px 8px;
+  padding: 4px 7px;
 }
 .slot.available {
   border-color: #ffe07e;
@@ -99,80 +133,49 @@ canvas {
 }
 .slot small {
   display: block;
-  opacity: 0.86;
 }
 .slot strong {
   display: flex;
   gap: 5px;
   align-items: center;
-  min-height: 22px;
+  justify-content: center;
+  min-height: 18px;
 }
-#hud svg,
-#toast svg {
-  width: 22px;
-  height: 18px;
-  vertical-align: middle;
+.slot svg {
+  width: 17px;
+  height: 14px;
 }
-.drift-row {
-  justify-content: space-between;
-  min-height: 22px;
+.desktop-drift {
+  position: absolute;
+  z-index: 2;
+  bottom: 60px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #152638c9;
+  border-radius: 8px;
+  padding: 3px 8px;
+  pointer-events: none;
 }
-.drift-row label {
-  display: flex;
-  gap: 7px;
-  align-items: center;
-  font-weight: 750;
+#drift-meter {
+  width: 88px;
+  height: 9px;
 }
-.drift-row progress {
-  width: 72px;
-  height: 10px;
-  accent-color: #96a9c4;
-}
-.drift-row label[data-tier="1"] progress {
+#drift-meter[data-tier="1"] {
   accent-color: #ffd746;
 }
-.drift-row label[data-tier="2"] progress {
+#drift-meter[data-tier="2"] {
   accent-color: #42baff;
 }
-.drift-row label[data-tier="3"] progress {
+#drift-meter[data-tier="3"] {
   accent-color: #ff454c;
 }
-#boost {
-  font-size: 11px;
-}
-.race-actions {
-  display: none;
-}
-.driving .race-actions {
-  display: flex;
-}
-.race-actions button {
-  pointer-events: auto;
-  touch-action: manipulation;
-  padding: 8px;
-  font-size: 11px;
-  text-transform: uppercase;
-  border-radius: 7px;
-}
-.race-actions button:first-child span {
-  display: inline-block;
-  font-size: 15px;
-}
-.race-actions button:last-child {
-  background: #344a5a;
-  color: white;
-}
-.race-actions .swapping span {
-  animation: rotate-arrows 0.64s ease-out;
-}
-@keyframes rotate-arrows {
-  to {
-    transform: rotate(180deg);
+@media (max-width: 450px) {
+  .stats span {
+    padding: 5px;
+    font-size: 10px;
   }
-}
-@media (prefers-reduced-motion: reduce) {
-  .race-actions .swapping span {
-    animation: none;
+  #speed {
+    font-size: 11px;
   }
 }
 #help {
@@ -248,45 +251,13 @@ button {
   opacity: 0.8;
 }
 @media (max-width: 690px) {
-  #hud {
-    grid-template-columns: 1fr;
-    padding: 8px;
-    gap: 6px;
-  }
-  .hud-top {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: space-between;
-    align-items: center;
-    gap: 5px;
-  }
-  .stats {
-    gap: 3px;
-  }
-  .stats span {
-    font-size: 10px;
-    padding: 5px;
-  }
-  #speed {
-    font-size: 12px;
-  }
-  .race-panel {
-    gap: 5px;
-    padding: 6px;
-    font-size: 11px;
-  }
   #help {
     font-size: 9px;
     white-space: normal;
     width: 95%;
   }
   #toast {
-    top: 29%;
-  }
-}
-@media (max-height: 480px) and (orientation: landscape) {
-  #hud {
-    grid-template-columns: 1fr auto;
+    top: 23%;
   }
 }
 #menu[hidden] {
@@ -541,17 +512,31 @@ button:disabled {
     grid-area: throttle;
     --ink: 20 103 85;
   }
-  #touch.automatic .touch-throttle::after {
-    content: "AUTO";
-    position: absolute;
-    top: -4px;
-    right: -5px;
-    color: #162925;
-    background: #cbffe7;
-    text-shadow: none;
-    border-radius: 6px;
-    padding: 2px 3px;
-    font: 900 8px system-ui;
+  #touch.automatic .touch-throttle {
+    display: none;
+  }
+  #touch #mobile-drift-meter {
+    accent-color: #ffad5f;
+    width: 64%;
+    height: 7px;
+    margin-top: 3px;
+    pointer-events: none;
+  }
+  #touch [data-tier="1"] progress {
+    accent-color: #ffd746;
+  }
+  #touch [data-tier="2"] progress {
+    accent-color: #42baff;
+  }
+  #touch [data-tier="3"] progress {
+    accent-color: #ff454c;
+  }
+  .desktop-drift {
+    display: none;
+  }
+  .hud-actions button {
+    width: 44px;
+    height: 44px;
   }
   #touch .touch-brake {
     grid-area: brake;
@@ -586,6 +571,21 @@ button:disabled {
   }
 }
 @media (any-pointer: coarse) and (orientation: portrait) {
+  .driving #portrait-hint {
+    display: block;
+    position: absolute;
+    z-index: 2;
+    top: calc(62px + env(safe-area-inset-top));
+    left: 50%;
+    transform: translateX(-50%);
+    white-space: nowrap;
+    color: #fff1d8;
+    background: #172739b5;
+    border-radius: 10px;
+    font-size: 11px;
+    padding: 4px 9px;
+    pointer-events: none;
+  }
   .touch-utility {
     position: absolute;
     left: max(10px, env(safe-area-inset-left));

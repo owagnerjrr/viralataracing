@@ -3,7 +3,7 @@ const storageKey = "vira-lata-mobile-controls-v1";
 export const defaultMobileSettings = Object.freeze({
   size: 100,
   opacity: 72,
-  auto: false,
+  auto: true,
   inverted: false,
 });
 
@@ -15,7 +15,10 @@ export function normalizeMobileSettings(value) {
   return {
     size: bounded(value?.size, defaultMobileSettings.size, 80, 125),
     opacity: bounded(value?.opacity, defaultMobileSettings.opacity, 30, 100),
-    auto: value?.auto === true,
+    auto:
+      typeof value?.auto === "boolean"
+        ? value.auto
+        : defaultMobileSettings.auto,
     inverted: value?.inverted === true,
   };
 }
@@ -56,7 +59,7 @@ export function createMobileControls(
   settingsForm,
   { active, onCancelDrift, itemIcons },
 ) {
-  const phone = matchMedia("(pointer: coarse)");
+  const phone = matchMedia("(any-pointer: coarse)");
   const commands = new PointerCommands();
   const origins = new Map();
   const keys = [...panel.querySelectorAll("[data-key]")];
@@ -84,7 +87,7 @@ export function createMobileControls(
     panel.style.setProperty("--touch-scale", preferences.size / 100);
     panel.style.setProperty("--touch-opacity", preferences.opacity / 100);
     panel.classList.toggle("inverted", preferences.inverted);
-    panel.classList.toggle("automatic", preferences.auto);
+    panel.classList.toggle("automatic", preferences.auto && phone.matches);
     size.value = preferences.size;
     opacity.value = preferences.opacity;
     auto.checked = preferences.auto;
@@ -115,6 +118,7 @@ export function createMobileControls(
     .querySelector("[data-mobile-defaults]")
     .addEventListener("click", () => save(defaultMobileSettings));
   applySettings();
+  phone.addEventListener("change", applySettings);
 
   function updatePressed() {
     for (const button of keys) {
@@ -175,9 +179,13 @@ export function createMobileControls(
         if (button.hasPointerCapture(id)) button.releasePointerCapture(id);
       }
     },
-    update({ item, tier, activeDrift }) {
-      driftButton.dataset.tier = tier;
+    update({ item, tier, activeDrift, charge }) {
+      if (driftButton.dataset.tier !== String(tier))
+        driftButton.dataset.tier = tier;
       driftButton.classList.toggle("is-drifting", activeDrift);
+      const meter = driftButton.querySelector("progress");
+      meter.hidden = !activeDrift;
+      if (activeDrift && meter.value !== charge) meter.value = charge;
       if (displayedItem === item) return;
       displayedItem = item;
       itemButton.disabled = !item;

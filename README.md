@@ -1,4 +1,4 @@
-# Vira-Lata Racing 0.10
+# Vira-Lata Racing 0.11
 
 Use Node.js 24. No terminal, abra a pasta extraída e execute:
 
@@ -22,13 +22,15 @@ Abra o endereço HTTP exibido pelo Vite, normalmente `http://localhost:5173/`. C
 
 Em telas sensíveis ao toque, os botões aparecem durante a corrida.
 
-Em paisagem, use as setas de um lado e Drift, Acelerar, Freio e Item do outro. Para corrigir a direção durante um drift, deslize entre as duas setas mantendo o outro dedo em Drift. Solte Drift para liberar o mini-turbo acumulado.
+Em paisagem, use as setas de um lado e Drift, Freio e Item do outro. Para corrigir a direção durante um drift, deslize entre as duas setas mantendo o outro dedo em Drift. Solte Drift para liberar o mini-turbo acumulado.
 
-Em **Controles mobile**, no menu principal ou na pausa, ajuste o tamanho e a opacidade, inverta os lados ou ative a aceleração automática. O freio tem prioridade sobre a aceleração automática. As preferências são salvas no navegador. O botão **Restaurar padrão** volta para tamanho de 100%, opacidade de 72% e aceleração manual.
+Em **Controles mobile**, no menu principal ou na pausa, ajuste o tamanho e a opacidade, inverta os lados ou ative a aceleração automática. O freio tem prioridade sobre a aceleração automática. As preferências são salvas no navegador. O botão **Restaurar padrão** volta para tamanho de 100%, opacidade de 72% e aceleração automática. Desative a aceleração automática para exibir o acelerador.
 
-Cada personagem leva um item. A caixa de interrogação abastece primeiro o parceiro, se ele tiver espaço, e depois o piloto. O contorno amarelo indica o inventário que pode ser usado. A troca de assentos mantém os dois itens.
+Cada personagem leva um item. A caixa de interrogação abastece primeiro o parceiro, se ele tiver espaço, e depois o piloto. O HUD mostra o item que pode ser usado. Abra a pausa para consultar os dois inventários ou reiniciar a corrida. A troca de assentos mantém os dois itens.
 
 Na Volta do Ribeirão, a curva longa do lado direito permite carregar os três níveis de drift. As faíscas mudam de amarelo para azul e vermelho. Solte Espaço para liberar o mini-turbo. Cada nível eleva o limite de velocidade em 15%, 25% ou 40% por 0,8 s, 1,5 s ou 2,5 s, respectivamente. Use o raio amarelo do inventário para ativar o turbo de item.
+
+A pista tem 35,2 unidades de largura e 12 posições de largada. A corrida atual é solo. Em **Qualidade gráfica**, escolha Automática, Baixa, Média ou Alta. A configuração automática ajusta o custo da renderização conforme o tempo de quadro.
 
 ## Build e Vercel
 

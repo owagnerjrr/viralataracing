@@ -1,6 +1,8 @@
 import * as THREE from "three";
 
-export const COURSE_SCALE = 4 / 3;
+export const COURSE_SCALE = 8 / 3;
+export const ROAD_WIDTH = 13.2 * COURSE_SCALE;
+export const START_PROGRESS = 0.015;
 
 // Original riverside circuit, sampled uniformly by distance for the rails and checkpoints.
 const guide = new THREE.CatmullRomCurve3(
@@ -60,6 +62,16 @@ for (let i = 0; i < 160; i++) {
 }
 export const centerline = new THREE.CatmullRomCurve3(rounded, true);
 centerline.arcLengthDivisions = 2500;
+
+export function startingGrid(course = centerline) {
+  const length = course.getLength();
+  return [0, 1, 2, 3].flatMap((row) =>
+    [0, -1, 1].map((lane) => ({
+      progress: (START_PROGRESS - (row * 5.6) / length + 1) % 1,
+      offset: lane * 7.1,
+    })),
+  );
+}
 
 export function riverCenter(z) {
   const originalZ = z / COURSE_SCALE;
